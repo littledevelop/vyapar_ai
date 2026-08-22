@@ -1063,6 +1063,8 @@ export default function Home() {
   };
 
   const saveBill = () => {
+    // In production, Laravel API: POST /api/bills/store
+    // await fetch('/api/bills/store', { method: 'POST', body: JSON.stringify(extracted) })
     if (!extracted) return;
 
     const bill: Bill = {
