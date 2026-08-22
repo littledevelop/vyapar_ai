@@ -50,38 +50,19 @@ const LANG_KEY = "vyapar_lang";
 const PRIMARY = "#1E3A8A";
 const PROFIT_GREEN = "#10B981";
 
-const SHOPS = [
-  "Patel Kirana Bayad",
-  "Shree Medical Mehsana",
-  "Gujarat Traders Surat",
-] as const;
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 const CATEGORIES = ["Sales", "Purchase", "Kharch"] as const;
+
+type Category = (typeof CATEGORIES)[number];
+
+type Lang = "EN" | "HI" | "GU";
 
 const PIE_COLORS: Record<Category, string> = {
   Sales: "#10B981",
   Purchase: "#1E3A8A",
   Kharch: "#F59E0B",
 };
-
-const PATEL_BILL: Extracted = {
-  shopName: "Patel Kirana & General Store Bayad",
-  date: "2026-08-22",
-  totalAmount: 1005,
-  items: [
-    "Chawal 5kg",
-    "Tel 1L",
-    "Khand 2kg",
-    "Chai Patti 500g",
-    "Biscuit",
-  ],
-  category: "Sales",
-  confidence: 98,
-};
-
-type Lang = "EN" | "HI" | "GU";
-
-type Category = (typeof CATEGORIES)[number];
 
 type Bill = {
   id: string;
@@ -96,12 +77,77 @@ type Bill = {
 
 type Extracted = Omit<Bill, "id">;
 
-const en = {
+type Copy = {
+  tagline: string;
+  cta: string;
+  heroTitle: string;
+  heroSub: string;
+  billsParsed: string;
+  profitTracked: string;
+  timeSaved: string;
+  uploadTitle: string;
+  uploadHint: string;
+  uploadBtn: string;
+  sampleBill: string;
+  extracting: string;
+  preview: string;
+  extracted: string;
+  shop: string;
+  date: string;
+  amount: string;
+  items: string;
+  category: string;
+  confidence: string;
+  save: string;
+  saved: string;
+  updated: string;
+  noPreview: string;
+  dashboard: string;
+  totalSales: string;
+  totalPurchase: string;
+  totalKharch: string;
+  netProfit: string;
+  monthly: string;
+  pieTitle: string;
+  vendors: string;
+  billsCount: string;
+  noVendors: string;
+  brain: string;
+  speak: string;
+  whatsapp: string;
+  pdf: string;
+  recent: string;
+  search: string;
+  all: string;
+  action: string;
+  delete: string;
+  edit: string;
+  editTitle: string;
+  saveChanges: string;
+  cancel: string;
+  emptyTitle: string;
+  emptySub: string;
+  noResults: string;
+  noImage: string;
+  catSales: string;
+  catPurchase: string;
+  catKharch: string;
+  speakTpl: string;
+  waTpl: string;
+  insightKharch: string;
+  insightDay: string;
+  insightUp: string;
+  insightDown: string;
+  invalidFile: string;
+  fileTooLarge: string;
+};
+
+const en: Copy = {
   tagline: "Bill Parser & Vyapar Intelligence",
   cta: "Start for Free",
   heroTitle: "Business accounts, with AI",
   heroSub:
-    "Upload a bill photo — AI instantly shows profit in Gujarati, Hindi and English",
+    "Upload a bill photo — VyaparAI extracts useful business data and shows your profit in Gujarati, Hindi and English.",
   billsParsed: "Bills parsed",
   profitTracked: "Profit tracked",
   timeSaved: "Time saved",
@@ -147,7 +193,7 @@ const en = {
   cancel: "Cancel",
   emptyTitle: "No bills yet — upload your first bill",
   emptySub:
-    "Take a photo of a kirana / medical bill and drop it above. AI will extract shop, amount and category.",
+    "Upload a kirana, medical or business bill. The extracted information will appear here.",
   noResults: "No bills match this search",
   noImage: "Upload a bill to see preview",
   catSales: "Sales",
@@ -156,20 +202,21 @@ const en = {
   speakTpl: "Your total profit is {x} rupees",
   waTpl:
     "My profit report from VyaparAI PRO:\nSales: {s}\nPurchase: {p}\nExpense: {k}\nNet profit: {n}",
-  insightKharch: "Expense is {x}% of mix — bought {n} times from {shop}",
+  insightKharch: "Expense is {x}% of mix — {shop} appears {n} times",
   insightDay: "Most sales happen on {day}",
   insightUp: "Profit is {p}% higher than last month",
   insightDown: "Profit is {p}% lower than last month",
+  invalidFile: "Please upload a JPG, PNG or PDF bill.",
+  fileTooLarge: "File is too large. Maximum allowed size is 10 MB.",
 };
 
-type Copy = typeof en;
-
 const hi: Copy = {
+  ...en,
   tagline: "बिल पार्सर और व्यापार इंटेलिजेंस",
   cta: "फ्री में शुरू करें",
   heroTitle: "व्यापार का हिसाब, एआई के साथ",
   heroSub:
-    "बिल का फोटो अपलोड करें, एआई तुरंत मुनाफा बताएगा — गुजराती, हिंदी और अंग्रेज़ी में",
+    "बिल का फोटो अपलोड करें — VyaparAI जानकारी निकालेगा और मुनाफा दिखाएगा।",
   billsParsed: "पार्स किए बिल",
   profitTracked: "ट्रैक किया मुनाफा",
   timeSaved: "बचाया समय",
@@ -201,9 +248,6 @@ const hi: Copy = {
   billsCount: "बिल",
   noVendors: "अभी कोई विक्रेता नहीं",
   brain: "एआई सलाह — व्यापार ब्रेन",
-  speak: "🔊 Profit Suno",
-  whatsapp: "WhatsApp Par Bhejo",
-  pdf: "Download PDF Report",
   recent: "हाल के बिल",
   search: "दुकान, तारीख, राशि या सामान खोजें…",
   all: "सभी",
@@ -215,27 +259,30 @@ const hi: Copy = {
   cancel: "रद्द करें",
   emptyTitle: "कोई बिल नहीं है — पहला बिल अपलोड करें",
   emptySub:
-    "किराना या मेडिकल बिल की फोटो लें और ऊपर छोड़ें। एआई दुकान, राशि और श्रेणी निकाल देगा।",
+    "किराना, मेडिकल या बिजनेस बिल अपलोड करें। निकाली गई जानकारी यहाँ दिखाई देगी।",
   noResults: "इस खोज से कोई बिल नहीं मिला",
   noImage: "पूर्वावलोकन के लिए बिल अपलोड करें",
   catSales: "बिक्री",
   catPurchase: "खरीद",
   catKharch: "खर्च",
-  speakTpl: "आपका कुल नफा {x} रुपये है",
+  speakTpl: "आपका कुल मुनाफा {x} रुपये है",
   waTpl:
     "VyaparAI PRO से मेरी मुनाफा रिपोर्ट:\nबिक्री: {s}\nखरीद: {p}\nखर्च: {k}\nशुद्ध लाभ: {n}",
-  insightKharch: "खर्च {x}% हिस्सा है — {shop} से {n} बार खरीदी",
+  insightKharch: "खर्च {x}% है — {shop} {n} बार दिखाई देता है",
   insightDay: "{day} को सबसे ज्यादा बिक्री होती है",
   insightUp: "लाभ पिछले महीने से {p}% ज्यादा है",
   insightDown: "लाभ पिछले महीने से {p}% कम है",
+  invalidFile: "कृपया JPG, PNG या PDF बिल अपलोड करें।",
+  fileTooLarge: "फाइल बहुत बड़ी है। अधिकतम सीमा 10 MB है।",
 };
 
 const gu: Copy = {
+  ...en,
   tagline: "બિલ પાર્સર અને વ્યાપાર ઇન્ટેલિજન્સ",
   cta: "ફ્રીમાં શરૂ કરો",
   heroTitle: "વ્યાપારનો હિસાબ, એઆઈ સાથે",
   heroSub:
-    "બિલનો ફોટો અપલોડ કરો, એઆઈ તરત નફો બતાવશે — ગુજરાતી, હિન્દી અને અંગ્રેજીમાં",
+    "બિલનો ફોટો અપલોડ કરો — VyaparAI માહિતી કાઢશે અને નફો બતાવશે.",
   billsParsed: "પાર્સ થયેલા બિલ",
   profitTracked: "ટ્રેક કરેલો નફો",
   timeSaved: "બચાવેલો સમય",
@@ -267,9 +314,6 @@ const gu: Copy = {
   billsCount: "બિલ",
   noVendors: "હજુ કોઈ વેચનાર નથી",
   brain: "એઆઈ સલાહ — વ્યાપાર બ્રેઇન",
-  speak: "🔊 Profit Suno",
-  whatsapp: "WhatsApp Par Bhejo",
-  pdf: "Download PDF Report",
   recent: "તાજેતરના બિલ",
   search: "દુકાન, તારીખ, રકમ અથવા વસ્તુ શોધો…",
   all: "બધા",
@@ -281,7 +325,7 @@ const gu: Copy = {
   cancel: "રદ કરો",
   emptyTitle: "કોઈ બિલ નથી — પહેલું બિલ અપલોડ કરો",
   emptySub:
-    "કિરાણા અથવા મેડિકલ બિલનો ફોટો લો અને ઉપર મૂકો. એઆઈ દુકાન, રકમ અને શ્રેણી કાઢશે.",
+    "કિરાણા, મેડિકલ અથવા બિઝનેસ બિલ અપલોડ કરો. કાઢેલી માહિતી અહીં દેખાશે.",
   noResults: "આ શોધ સાથે કોઈ બિલ મળ્યું નહીં",
   noImage: "પૂર્વાવલોકન માટે બિલ અપલોડ કરો",
   catSales: "વેચાણ",
@@ -290,10 +334,12 @@ const gu: Copy = {
   speakTpl: "તમારો કુલ નફો {x} રૂપિયા છે",
   waTpl:
     "VyaparAI PROથી મારી નફા રિપોર્ટ:\nવેચાણ: {s}\nખરીદી: {p}\nખર્ચ: {k}\nચોખ્ખો નફો: {n}",
-  insightKharch: "ખર્ચ {x}% હિસ્સો છે — {shop} પાસેથી {n} વાર ખરીદી",
+  insightKharch: "ખર્ચ {x}% છે — {shop} {n} વાર દેખાય છે",
   insightDay: "{day}એ સૌથી વધુ વેચાણ થાય છે",
   insightUp: "નફો પાછલા મહિના કરતાં {p}% વધુ છે",
   insightDown: "નફો પાછલા મહિના કરતાં {p}% ઓછો છે",
+  invalidFile: "કૃપા કરીને JPG, PNG અથવા PDF બિલ અપલોડ કરો.",
+  fileTooLarge: "ફાઇલ ખૂબ મોટી છે. મહત્તમ મર્યાદા 10 MB છે.",
 };
 
 const copy: Record<Lang, Copy> = {
@@ -302,37 +348,58 @@ const copy: Record<Lang, Copy> = {
   GU: gu,
 };
 
-function catLabel(t: Copy, cat: Category) {
+function isLang(value: string | null): value is Lang {
+  return value === "EN" || value === "HI" || value === "GU";
+}
+
+function isCategory(value: string): value is Category {
+  return (CATEGORIES as readonly string[]).includes(value);
+}
+
+function catLabel(t: Copy, cat: Category): string {
   if (cat === "Sales") return t.catSales;
   if (cat === "Purchase") return t.catPurchase;
   return t.catKharch;
 }
 
-function inr(n: number) {
+function inr(n: number): string {
   return `₹${Math.round(n).toLocaleString("en-IN")}`;
 }
 
-function todayISO() {
+function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function isoMonthsAgo(months: number, day = 8) {
+function isoMonthsAgo(months: number, day = 8): string {
   const d = new Date();
   d.setMonth(d.getMonth() - months, day);
   return d.toISOString().slice(0, 10);
 }
 
-// Demo helper - currently always returns true.
-function isPatelKiranaBill(_file: File): boolean {
-  return true;
+function monthKey(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00`);
+
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}`;
 }
 
-// Demo OCR - returns the fixed Patel bill.
-function mockOCR(_file: File): Extracted {
-  return {
-    ...PATEL_BILL,
-    date: todayISO(),
-  };
+function fillTpl(
+  template: string,
+  vars: Record<string, string | number>
+): string {
+  return Object.entries(vars).reduce(
+    (result, [key, value]) =>
+      result.split(`{${key}}`).join(String(value)),
+    template
+  );
+}
+
+function sumBy(bills: Bill[], category: Category): number {
+  return bills
+    .filter((bill) => bill.category === category)
+    .reduce((sum, bill) => sum + bill.totalAmount, 0);
 }
 
 function sampleBills(): Bill[] {
@@ -351,7 +418,7 @@ function sampleBills(): Bill[] {
       shopName: "Shree Medical Mehsana",
       date: isoMonthsAgo(1, 6),
       totalAmount: 4320,
-      items: ["Rice 5kg", "Oil 1L", "Sugar 2kg"],
+      items: ["Medicine", "Gloves", "Syrup"],
       category: "Purchase",
       confidence: 97,
     },
@@ -360,76 +427,79 @@ function sampleBills(): Bill[] {
       shopName: "Gujarat Traders Surat",
       date: isoMonthsAgo(0, 20),
       totalAmount: 1650,
-      items: ["Rice 5kg", "Oil 1L", "Sugar 2kg"],
+      items: ["Transport", "Packaging", "Stationery"],
       category: "Kharch",
       confidence: 96,
     },
   ];
 }
 
-function persist(bills: Bill[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(bills));
+function readImageAsDataUrl(file: File): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(String(reader.result));
+
+    reader.onerror = () =>
+      reject(new Error("Unable to read image"));
+
+    reader.readAsDataURL(file);
+  });
 }
 
-function sumBy(bills: Bill[], cat: Category) {
-  return bills
-    .filter((b) => b.category === cat)
-    .reduce((s, b) => s + b.totalAmount, 0);
-}
-
-function monthKey(dateStr: string) {
-  const d = new Date(`${dateStr}T00:00:00`);
-
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function last6MonthKeys(lang: Lang) {
+function last6MonthKeys(
+  lang: Lang
+): Array<{ key: string; label: string }> {
   const locale =
-    lang === "HI" ? "hi-IN" : lang === "GU" ? "gu-IN" : "en-IN";
+    lang === "HI"
+      ? "hi-IN"
+      : lang === "GU"
+        ? "gu-IN"
+        : "en-IN";
 
-  const keys: { key: string; label: string }[] = [];
+  const result: Array<{ key: string; label: string }> = [];
 
   const now = new Date();
 
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+  for (let i = 5; i >= 0; i -= 1) {
+    const d = new Date(
+      now.getFullYear(),
+      now.getMonth() - i,
+      1
+    );
 
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
-      2,
-      "0"
-    )}`;
-
-    keys.push({
-      key,
+    result.push({
+      key: `${d.getFullYear()}-${String(
+        d.getMonth() + 1
+      ).padStart(2, "0")}`,
       label: d.toLocaleString(locale, {
         month: "short",
       }),
     });
   }
 
-  return keys;
+  return result;
 }
 
-function weekdayName(dateStr: string, lang: Lang) {
+function weekdayName(
+  dateStr: string,
+  lang: Lang
+): string {
   const locale =
-    lang === "HI" ? "hi-IN" : lang === "GU" ? "gu-IN" : "en-IN";
+    lang === "HI"
+      ? "hi-IN"
+      : lang === "GU"
+        ? "gu-IN"
+        : "en-IN";
 
-  return new Date(`${dateStr}T00:00:00`).toLocaleDateString(locale, {
+  return new Date(
+    `${dateStr}T00:00:00`
+  ).toLocaleDateString(locale, {
     weekday: "long",
   });
 }
 
-function fillTpl(
-  tpl: string,
-  vars: Record<string, string | number>
-) {
-  return Object.entries(vars).reduce(
-    (s, [k, v]) => s.split(`{${k}}`).join(String(v)),
-    tpl
-  );
-}
-
-function downloadSampleGujaratiBill() {
+function downloadSampleGujaratiBill(): void {
   const canvas = document.createElement("canvas");
 
   canvas.width = 720;
@@ -440,10 +510,16 @@ function downloadSampleGujaratiBill() {
   if (!ctx) return;
 
   ctx.fillStyle = "#fffaf3";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
 
-  ctx.strokeStyle = "#1E3A8A";
+  ctx.strokeStyle = PRIMARY;
   ctx.lineWidth = 8;
+
   ctx.strokeRect(
     24,
     24,
@@ -451,7 +527,8 @@ function downloadSampleGujaratiBill() {
     canvas.height - 48
   );
 
-  ctx.fillStyle = "#1E3A8A";
+  ctx.fillStyle = PRIMARY;
+
   ctx.fillRect(
     24,
     24,
@@ -505,8 +582,10 @@ function downloadSampleGujaratiBill() {
   ctx.beginPath();
   ctx.moveTo(56, 240);
   ctx.lineTo(664, 240);
+
   ctx.strokeStyle = "#cbd5e1";
   ctx.lineWidth = 2;
+
   ctx.stroke();
 
   ctx.font =
@@ -517,7 +596,9 @@ function downloadSampleGujaratiBill() {
   ctx.fillText("ભાવ", 440, 280);
   ctx.fillText("કુલ", 580, 280);
 
-  const rows: [string, string, string, string][] = [
+  const rows: Array<
+    [string, string, string, string]
+  > = [
     [
       "બાસમતી ચોખા 5 કિ.ગ્રા.",
       "1",
@@ -530,31 +611,21 @@ function downloadSampleGujaratiBill() {
       "₹145",
       "₹290",
     ],
-    [
-      "ખાંડ 2 કિ.ગ્રા.",
-      "1",
-      "₹88",
-      "₹88",
-    ],
+    ["ખાંડ 2 કિ.ગ્રા.", "1", "₹88", "₹88"],
     [
       "તુવેર દાળ 1 કિ.ગ્રા.",
       "1",
       "₹165",
       "₹165",
     ],
-    [
-      "મીઠું 1 કિ.ગ્રા.",
-      "1",
-      "₹22",
-      "₹22",
-    ],
+    ["મીઠું 1 કિ.ગ્રા.", "1", "₹22", "₹22"],
   ];
 
   ctx.font =
     "18px Nirmala UI, Shruti, sans-serif";
 
-  rows.forEach((row, i) => {
-    const y = 330 + i * 48;
+  rows.forEach((row, index) => {
+    const y = 330 + index * 48;
 
     ctx.fillText(row[0], 56, y);
     ctx.fillText(row[1], 332, y);
@@ -579,12 +650,13 @@ function downloadSampleGujaratiBill() {
   ctx.font =
     "bold 28px Nirmala UI, Shruti, sans-serif";
 
-  ctx.fillStyle = "#1E3A8A";
+  ctx.fillStyle = PRIMARY;
 
   ctx.fillText("કુલ રકમ", 400, 720);
   ctx.fillText("₹1,034", 560, 720);
 
   ctx.fillStyle = "#475569";
+
   ctx.font =
     "16px Nirmala UI, Shruti, sans-serif";
 
@@ -596,27 +668,23 @@ function downloadSampleGujaratiBill() {
     860
   );
 
-  // FIX:
-  // toBlob() belongs to HTMLCanvasElement,
-  // not CanvasRenderingContext2D.
-  canvas.toBlob(
-    (blob: Blob | null) => {
-      if (!blob) return;
+  canvas.toBlob((blob) => {
+    if (!blob) return;
 
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
+    const url = URL.createObjectURL(blob);
 
-      a.href = url;
-      a.download = "sample-gujarati-bill.png";
+    const anchor = document.createElement("a");
 
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+    anchor.href = url;
+    anchor.download = "sample-gujarati-bill.png";
 
-      URL.revokeObjectURL(url);
-    },
-    "image/png"
-  );
+    document.body.appendChild(anchor);
+
+    anchor.click();
+    anchor.remove();
+
+    URL.revokeObjectURL(url);
+  }, "image/png");
 }
 
 export default function Home() {
@@ -665,11 +733,7 @@ export default function Home() {
       const savedLang =
         localStorage.getItem(LANG_KEY);
 
-      if (
-        savedLang === "EN" ||
-        savedLang === "HI" ||
-        savedLang === "GU"
-      ) {
+      if (isLang(savedLang)) {
         setLang(savedLang);
       }
 
@@ -679,40 +743,90 @@ export default function Home() {
       if (!raw) {
         const seed = sampleBills();
 
-        persist(seed);
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify(seed)
+        );
+
         setBills(seed);
       } else {
-        const parsed =
-          JSON.parse(raw) as Bill[];
+        const parsed: unknown =
+          JSON.parse(raw);
 
-        setBills(
-          Array.isArray(parsed)
-            ? parsed
-            : sampleBills()
-        );
+        if (Array.isArray(parsed)) {
+          setBills(parsed as Bill[]);
+        } else {
+          const seed = sampleBills();
+
+          localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify(seed)
+          );
+
+          setBills(seed);
+        }
       }
     } catch {
       const seed = sampleBills();
 
-      persist(seed);
-      setBills(seed);
-    }
+      try {
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify(seed)
+        );
+      } catch {
+        // Ignore storage errors.
+      }
 
-    setHydrated(true);
+      setBills(seed);
+    } finally {
+      setHydrated(true);
+    }
   }, []);
 
-  const changeLang = (code: Lang) => {
-    setLang(code);
-    localStorage.setItem(LANG_KEY, code);
-  };
-
-  const setAndSave = useCallback(
+  const persist = useCallback(
     (next: Bill[]) => {
       setBills(next);
-      persist(next);
+
+      try {
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify(next)
+        );
+      } catch (error) {
+        console.error(
+          "Unable to save bills:",
+          error
+        );
+      }
     },
     []
   );
+
+  const showToast = useCallback(
+    (message: string) => {
+      setToast(message);
+
+      window.setTimeout(
+        () => setToast(""),
+        2200
+      );
+    },
+    []
+  );
+
+  const changeLang = (code: Lang): void => {
+    setLang(code);
+
+    try {
+      localStorage.setItem(
+        LANG_KEY,
+        code
+      );
+    } catch {
+      // Ignore storage errors.
+    }
+  };
 
   const sales = useMemo(
     () => sumBy(bills, "Sales"),
@@ -730,7 +844,7 @@ export default function Home() {
   );
 
   const profit =
-    sales - (purchase + kharch);
+    sales - purchase - kharch;
 
   const profitUp = profit >= 0;
 
@@ -739,21 +853,21 @@ export default function Home() {
       ({ key, label }) => {
         const monthBills =
           bills.filter(
-            (b) => monthKey(b.date) === key
+            (bill) =>
+              monthKey(bill.date) === key
           );
 
-        const s = sumBy(
-          monthBills,
-          "Sales"
-        );
+        const monthSales =
+          sumBy(monthBills, "Sales");
 
-        const p =
+        const monthExpenses =
           sumBy(monthBills, "Purchase") +
           sumBy(monthBills, "Kharch");
 
         return {
           month: label,
-          profit: s - p,
+          profit:
+            monthSales - monthExpenses,
         };
       }
     );
@@ -777,8 +891,15 @@ export default function Home() {
           key: "Kharch" as Category,
           value: kharch,
         },
-      ].filter((d) => d.value > 0),
-    [sales, purchase, kharch, t]
+      ].filter(
+        (item) => item.value > 0
+      ),
+    [
+      sales,
+      purchase,
+      kharch,
+      t,
+    ]
   );
 
   const vendors = useMemo(() => {
@@ -790,281 +911,360 @@ export default function Home() {
       }
     >();
 
-    for (const b of bills) {
-      const cur =
-        map.get(b.shopName) ?? {
+    bills.forEach((bill) => {
+      const current =
+        map.get(bill.shopName) ?? {
           total: 0,
           count: 0,
         };
 
-      cur.total += b.totalAmount;
-      cur.count += 1;
+      current.total +=
+        bill.totalAmount;
 
-      map.set(b.shopName, cur);
-    }
+      current.count += 1;
+
+      map.set(
+        bill.shopName,
+        current
+      );
+    });
 
     return [...map.entries()]
-      .map(([name, v]) => ({
+      .map(([name, value]) => ({
         name,
-        ...v,
+        ...value,
       }))
       .sort(
-        (a, b) => b.total - a.total
+        (a, b) =>
+          b.total - a.total
       )
       .slice(0, 5);
   }, [bills]);
 
   const insights = useMemo(() => {
-    const kharchBills = bills.filter(
-      (b) => b.category === "Kharch"
-    );
-
-    const topKharch = vendors[0];
-
-    const mix =
+    const totalMix =
       sales + purchase + kharch;
 
     const kharchShare =
-      mix > 0
-        ? Math.round((kharch / mix) * 100)
-        : 32;
+      totalMix > 0
+        ? Math.round(
+            (kharch / totalMix) * 100
+          )
+        : 0;
 
     const salesByDay =
       new Map<string, number>();
 
-    for (
-      const b of bills.filter(
-        (x) => x.category === "Sales"
+    bills
+      .filter(
+        (bill) =>
+          bill.category === "Sales"
       )
-    ) {
-      const day = weekdayName(
-        b.date,
+      .forEach((bill) => {
+        const day =
+          weekdayName(
+            bill.date,
+            lang
+          );
+
+        salesByDay.set(
+          day,
+          (salesByDay.get(day) ?? 0) +
+            bill.totalAmount
+        );
+      });
+
+    let bestDay =
+      weekdayName(
+        todayISO(),
         lang
       );
 
-      salesByDay.set(
-        day,
-        (salesByDay.get(day) ?? 0) +
-          b.totalAmount
-      );
-    }
+    let bestValue = -1;
 
-    let bestDay =
-      weekdayName(todayISO(), lang);
-
-    let bestVal = -1;
-
-    for (const [day, val] of salesByDay) {
-      if (val > bestVal) {
-        bestVal = val;
-        bestDay = day;
+    salesByDay.forEach(
+      (value, day) => {
+        if (value > bestValue) {
+          bestValue = value;
+          bestDay = day;
+        }
       }
-    }
+    );
 
     const now = new Date();
 
-    const thisKey = `${now.getFullYear()}-${String(
-      now.getMonth() + 1
-    ).padStart(2, "0")}`;
+    const currentKey =
+      monthKey(todayISO());
 
-    const prev = new Date(
-      now.getFullYear(),
-      now.getMonth() - 1,
-      1
-    );
-
-    const prevKey = `${prev.getFullYear()}-${String(
-      prev.getMonth() + 1
-    ).padStart(2, "0")}`;
-
-    const monthProfit = (
-      key: string
-    ) => {
-      const mb = bills.filter(
-        (b) => monthKey(b.date) === key
+    const previousKey =
+      monthKey(
+        new Date(
+          now.getFullYear(),
+          now.getMonth() - 1,
+          1
+        )
+          .toISOString()
+          .slice(0, 10)
       );
 
-      return (
-        sumBy(mb, "Sales") -
-        (sumBy(mb, "Purchase") +
-          sumBy(mb, "Kharch"))
-      );
-    };
+    const monthProfit =
+      (key: string): number => {
+        const monthBills =
+          bills.filter(
+            (bill) =>
+              monthKey(bill.date) === key
+          );
 
-    const thisProfit =
-      monthProfit(thisKey);
+        return (
+          sumBy(
+            monthBills,
+            "Sales"
+          ) -
+          sumBy(
+            monthBills,
+            "Purchase"
+          ) -
+          sumBy(
+            monthBills,
+            "Kharch"
+          )
+        );
+      };
 
-    const lastProfit =
-      monthProfit(prevKey);
+    const currentProfit =
+      monthProfit(currentKey);
 
-    let pct = 18;
+    const previousProfit =
+      monthProfit(previousKey);
 
-    if (lastProfit !== 0) {
-      pct = Math.round(
-        ((thisProfit - lastProfit) /
-          Math.abs(lastProfit)) *
-          100
-      );
-    }
+    const percentage =
+      previousProfit === 0
+        ? currentProfit === 0
+          ? 0
+          : 100
+        : Math.round(
+            ((currentProfit -
+              previousProfit) /
+              Math.abs(
+                previousProfit
+              )) *
+              100
+          );
 
-    const shop =
-      topKharch?.name ??
-      "Patel Traders";
+    const topVendor = vendors[0];
 
-    const shopHits =
-      kharchBills.filter(
-        (b) => b.shopName === shop
-      ).length || 3;
+    const shopName =
+      topVendor?.name ??
+      "your top vendor";
+
+    const shopCount =
+      topVendor?.count ?? 0;
 
     return [
-      fillTpl(t.insightKharch, {
-        x: kharchShare,
-        n: shopHits,
-        shop,
-      }),
-
-      fillTpl(t.insightDay, {
-        day: bestDay,
-      }),
+      fillTpl(
+        t.insightKharch,
+        {
+          x: kharchShare,
+          n: shopCount,
+          shop: shopName,
+        }
+      ),
 
       fillTpl(
-        pct >= 0
+        t.insightDay,
+        {
+          day: bestDay,
+        }
+      ),
+
+      fillTpl(
+        percentage >= 0
           ? t.insightUp
           : t.insightDown,
         {
-          p: Math.abs(pct),
+          p: Math.abs(
+            percentage
+          ),
         }
       ),
     ];
   }, [
     bills,
-    vendors,
-    sales,
-    purchase,
-    kharch,
     lang,
+    kharch,
+    purchase,
+    sales,
     t,
+    vendors,
   ]);
 
   const filtered = useMemo(() => {
-    const q = query
-      .trim()
-      .toLowerCase();
+    const q =
+      query
+        .trim()
+        .toLowerCase();
 
     return [...bills]
       .sort(
         (a, b) =>
-          b.date.localeCompare(a.date) ||
-          b.id.localeCompare(a.id)
+          b.date.localeCompare(
+            a.date
+          ) ||
+          b.id.localeCompare(
+            a.id
+          )
       )
-      .filter(
-        (b) =>
-          filterCat === "All"
-            ? true
-            : b.category === filterCat
+      .filter((bill) =>
+        filterCat === "All"
+          ? true
+          : bill.category ===
+            filterCat
       )
-      .filter((b) => {
+      .filter((bill) => {
         if (!q) return true;
 
-        const hay = [
-          b.shopName,
-          b.date,
-          String(b.totalAmount),
-          inr(b.totalAmount),
-          b.category,
-          catLabel(t, b.category),
-          b.items.join(" "),
+        const searchable = [
+          bill.shopName,
+          bill.date,
+          String(
+            bill.totalAmount
+          ),
+          inr(
+            bill.totalAmount
+          ),
+          bill.category,
+          catLabel(
+            t,
+            bill.category
+          ),
+          bill.items.join(" "),
         ]
           .join(" ")
           .toLowerCase();
 
-        return hay.includes(q);
+        return searchable.includes(q);
       })
       .slice(0, 10);
   }, [
     bills,
-    query,
     filterCat,
+    query,
     t,
   ]);
 
-  const showToast = (msg: string) => {
-    setToast(msg);
-
-    window.setTimeout(
-      () => setToast(""),
-      2200
-    );
-  };
-
   const processFile = async (
     file: File
-  ) => {
+  ): Promise<void> => {
+    if (
+      !file.type.startsWith(
+        "image/"
+      ) &&
+      file.type !== "application/pdf"
+    ) {
+      showToast(t.invalidFile);
+      return;
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      showToast(t.fileTooLarge);
+      return;
+    }
+
     setBusy(true);
     setExtracted(null);
 
-    const isImage =
-      file.type.startsWith("image/");
+    try {
+      const isImage =
+        file.type.startsWith(
+          "image/"
+        );
 
-    let dataUrl: string | undefined;
+      let dataUrl:
+        | string
+        | undefined;
 
-    if (isImage) {
-      dataUrl =
-        await new Promise<string>(
-          (resolve, reject) => {
-            const reader =
-              new FileReader();
+      if (isImage) {
+        dataUrl =
+          await readImageAsDataUrl(
+            file
+          );
 
-            reader.onload = () =>
-              resolve(
-                String(
-                  reader.result
-                )
-              );
+        setPreview(dataUrl);
+      } else {
+        setPreview(null);
+      }
 
-            reader.onerror = () =>
-              reject(
-                new Error(
-                  "read failed"
-                )
-              );
+      const formData =
+        new FormData();
 
-            reader.readAsDataURL(file);
+      formData.append(
+        "file",
+        file
+      );
+
+      const response =
+        await fetch(
+          "/api/extract-bill",
+          {
+            method: "POST",
+            body: formData,
           }
         );
 
-      setPreview(dataUrl);
-    } else {
+      const result: unknown =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !isApiSuccess(result)
+      ) {
+        throw new Error(
+          getApiError(result) ||
+            "AI could not read the bill"
+        );
+      }
+
+      const data =
+        normalizeExtracted(
+          result.data
+        );
+
+      setExtracted({
+        ...data,
+        imageDataUrl:
+          dataUrl,
+      });
+
+      showToast(
+        "AI successfully extracted the bill"
+      );
+    } catch (error) {
+      console.error(error);
+
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "Failed to process bill"
+      );
+
       setPreview(null);
+      setExtracted(null);
+    } finally {
+      setBusy(false);
     }
-
-    await new Promise((r) =>
-      setTimeout(r, 700)
-    );
-
-    const data = mockOCR(file);
-
-    setExtracted({
-      ...data,
-      imageDataUrl: dataUrl,
-    });
-
-    setBusy(false);
   };
 
   const onFiles = (
     files: FileList | null
-  ) => {
+  ): void => {
     const file = files?.[0];
 
-    if (!file) return;
-
-    void processFile(file);
+    if (file) {
+      void processFile(file);
+    }
   };
 
-  const saveBill = () => {
-    // In production, Laravel API: POST /api/bills/store
-    // await fetch('/api/bills/store', { method: 'POST', body: JSON.stringify(extracted) })
+  const saveBill = (): void => {
     if (!extracted) return;
 
     const bill: Bill = {
@@ -1078,49 +1278,55 @@ export default function Home() {
         undefined,
     };
 
-    setAndSave([
+    persist([
       bill,
       ...bills,
     ]);
 
-    showToast(t.saved);
-
     setExtracted(null);
     setPreview(null);
+
+    showToast(t.saved);
   };
 
   const deleteBill = (
     id: string
-  ) => {
-    setAndSave(
+  ): void => {
+    persist(
       bills.filter(
-        (b) => b.id !== id
+        (bill) =>
+          bill.id !== id
       )
     );
 
-    if (editing?.id === id) {
+    if (
+      editing?.id === id
+    ) {
       setEditing(null);
     }
   };
 
   const openEdit = (
     bill: Bill
-  ) => {
+  ): void => {
     setEditing(bill);
-    setEditCat(bill.category);
+    setEditCat(
+      bill.category
+    );
   };
 
-  const saveEdit = () => {
+  const saveEdit = (): void => {
     if (!editing) return;
 
-    setAndSave(
-      bills.map((b) =>
-        b.id === editing.id
+    persist(
+      bills.map((bill) =>
+        bill.id === editing.id
           ? {
-              ...b,
-              category: editCat,
+              ...bill,
+              category:
+                editCat,
             }
-          : b
+          : bill
       )
     );
 
@@ -1129,7 +1335,13 @@ export default function Home() {
     showToast(t.updated);
   };
 
-  const speakProfit = () => {
+  const speakProfit = (): void => {
+    if (
+      !("speechSynthesis" in window)
+    ) {
+      return;
+    }
+
     const text = fillTpl(
       t.speakTpl,
       {
@@ -1143,22 +1355,24 @@ export default function Home() {
 
     window.speechSynthesis.cancel();
 
-    const u =
+    const utterance =
       new SpeechSynthesisUtterance(
         text
       );
 
-    u.lang =
+    utterance.lang =
       lang === "GU"
         ? "gu-IN"
         : lang === "HI"
-        ? "hi-IN"
-        : "en-IN";
+          ? "hi-IN"
+          : "en-IN";
 
-    window.speechSynthesis.speak(u);
+    window.speechSynthesis.speak(
+      utterance
+    );
   };
 
-  const sendWhatsApp = () => {
+  const sendWhatsApp = (): void => {
     const text = fillTpl(
       t.waTpl,
       {
@@ -1169,9 +1383,10 @@ export default function Home() {
       }
     );
 
-    const url = `https://wa.me/?text=${encodeURIComponent(
-      text
-    )}`;
+    const url =
+      `https://wa.me/?text=${encodeURIComponent(
+        text
+      )}`;
 
     window.open(
       url,
@@ -1180,8 +1395,9 @@ export default function Home() {
     );
   };
 
-  const downloadPdf = () => {
-    const doc = new jsPDF();
+  const downloadPdf = (): void => {
+    const doc =
+      new jsPDF();
 
     doc.setFontSize(18);
     doc.setTextColor(
@@ -1197,6 +1413,7 @@ export default function Home() {
     );
 
     doc.setFontSize(11);
+
     doc.setTextColor(
       15,
       23,
@@ -1212,16 +1429,16 @@ export default function Home() {
     );
 
     doc.text(
-      `${new Date().toLocaleString(
+      new Date().toLocaleString(
         "en-IN"
-      )}`,
+      ),
       14,
       38
     );
 
     let y = 52;
 
-    doc.setFontSize(12);
+    doc.setFontSize(10);
 
     doc.text(
       t.shop,
@@ -1249,8 +1466,6 @@ export default function Home() {
 
     y += 6;
 
-    doc.setLineWidth(0.3);
-
     doc.line(
       14,
       y,
@@ -1260,49 +1475,50 @@ export default function Home() {
 
     y += 8;
 
-    doc.setFontSize(10);
+    bills
+      .slice(0, 20)
+      .forEach((bill) => {
+        if (y > 270) {
+          doc.addPage();
+          y = 20;
+        }
 
-    for (
-      const b of bills.slice(0, 20)
-    ) {
-      if (y > 270) {
-        doc.addPage();
-        y = 20;
-      }
+        doc.text(
+          bill.shopName.slice(
+            0,
+            32
+          ),
+          14,
+          y
+        );
 
-      doc.text(
-        b.shopName.slice(0, 32),
-        14,
-        y
-      );
+        doc.text(
+          bill.date,
+          90,
+          y
+        );
 
-      doc.text(
-        b.date,
-        90,
-        y
-      );
+        doc.text(
+          catLabel(
+            t,
+            bill.category
+          ),
+          120,
+          y
+        );
 
-      doc.text(
-        catLabel(
-          t,
-          b.category
-        ),
-        120,
-        y
-      );
+        doc.text(
+          inr(
+            bill.totalAmount
+          ),
+          160,
+          y
+        );
 
-      doc.text(
-        inr(b.totalAmount),
-        160,
-        y
-      );
-
-      y += 8;
-    }
+        y += 8;
+      });
 
     y += 6;
-
-    doc.setFontSize(11);
 
     doc.text(
       `${t.totalSales}: ${inr(
@@ -1354,27 +1570,28 @@ export default function Home() {
   };
 
   const badge = (
-    cat: Category
-  ) => {
-    const map: Record<
+    category: Category
+  ): ReactNode => {
+    const styles: Record<
       Category,
       string
     > = {
       Sales:
         "bg-emerald-50 text-emerald-700 border-emerald-200",
-
       Purchase:
         "bg-blue-50 text-[#1E3A8A] border-blue-200",
-
       Kharch:
         "bg-red-50 text-red-700 border-red-200",
     };
 
     return (
       <span
-        className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${map[cat]}`}
+        className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${styles[category]}`}
       >
-        {catLabel(t, cat)}
+        {catLabel(
+          t,
+          category
+        )}
       </span>
     );
   };
@@ -1386,8 +1603,8 @@ export default function Home() {
         lang === "HI"
           ? "hi"
           : lang === "GU"
-          ? "gu"
-          : "en"
+            ? "gu"
+            : "en"
       }
     >
       <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 backdrop-blur">
@@ -1408,13 +1625,19 @@ export default function Home() {
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="flex overflow-hidden rounded-lg border border-slate-200 bg-slate-50 text-xs font-semibold sm:text-sm">
               {(
-                ["EN", "HI", "GU"] as const
+                [
+                  "EN",
+                  "HI",
+                  "GU",
+                ] as const
               ).map((code) => (
                 <button
                   key={code}
                   type="button"
                   onClick={() =>
-                    changeLang(code)
+                    changeLang(
+                      code
+                    )
                   }
                   className={`px-2.5 py-1.5 sm:px-3 ${
                     lang === code
@@ -1455,33 +1678,23 @@ export default function Home() {
           </p>
 
           <div className="mt-8 grid gap-4 sm:grid-cols-3">
-            {[
-              {
-                label: t.billsParsed,
-                value: "1250+",
-              },
-              {
-                label: t.profitTracked,
-                value: "₹2.5L+",
-              },
-              {
-                label: t.timeSaved,
-                value: "150hrs+",
-              },
-            ].map((s) => (
-              <div
-                key={s.label}
-                className="rounded-2xl border border-slate-100 bg-slate-50 p-5 shadow-sm"
-              >
-                <p className="text-2xl font-extrabold text-[#1E3A8A] sm:text-3xl">
-                  {s.value}
-                </p>
+            <StatCard
+              label={t.billsParsed}
+              value={`${bills.length}`}
+            />
 
-                <p className="mt-1 text-sm font-medium text-slate-500">
-                  {s.label}
-                </p>
-              </div>
-            ))}
+            <StatCard
+              label={t.profitTracked}
+              value={inr(profit)}
+            />
+
+            <StatCard
+              label={t.timeSaved}
+              value={`${Math.min(
+                bills.length * 5,
+                999
+              )} min`}
+            />
           </div>
         </section>
 
@@ -1490,18 +1703,18 @@ export default function Home() {
           className="scroll-mt-24"
         >
           <div
-            onDragOver={(e) => {
-              e.preventDefault();
+            onDragOver={(event) => {
+              event.preventDefault();
               setDragOver(true);
             }}
             onDragLeave={() =>
               setDragOver(false)
             }
-            onDrop={(e) => {
-              e.preventDefault();
+            onDrop={(event) => {
+              event.preventDefault();
               setDragOver(false);
               onFiles(
-                e.dataTransfer.files
+                event.dataTransfer.files
               );
             }}
             className={`rounded-3xl border-2 border-dashed bg-white p-8 text-center shadow-lg transition ${
@@ -1525,9 +1738,13 @@ export default function Home() {
               type="file"
               accept="image/*,.pdf,application/pdf"
               className="hidden"
-              onChange={(e) => {
-                onFiles(e.target.files);
-                e.target.value = "";
+              onChange={(event) => {
+                onFiles(
+                  event.target.files
+                );
+
+                event.target.value =
+                  "";
               }}
             />
 
@@ -1570,7 +1787,7 @@ export default function Home() {
               {preview ? (
                 <img
                   src={preview}
-                  alt=""
+                  alt="Uploaded bill preview"
                   className="max-h-80 w-full rounded-2xl bg-slate-50 object-contain"
                 />
               ) : (
@@ -1602,7 +1819,9 @@ export default function Home() {
 
                   <Row
                     label={t.date}
-                    value={extracted.date}
+                    value={
+                      extracted.date
+                    }
                   />
 
                   <Row
@@ -1630,7 +1849,9 @@ export default function Home() {
                   </div>
 
                   <Row
-                    label={t.confidence}
+                    label={
+                      t.confidence
+                    }
                     value={`${extracted.confidence}%`}
                   />
 
@@ -1658,7 +1879,9 @@ export default function Home() {
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Kpi
-              title={t.totalSales}
+              title={
+                t.totalSales
+              }
               value={sales}
               icon={
                 <IndianRupee className="h-5 w-5" />
@@ -1667,7 +1890,9 @@ export default function Home() {
             />
 
             <Kpi
-              title={t.totalPurchase}
+              title={
+                t.totalPurchase
+              }
               value={purchase}
               icon={
                 <ShoppingCart className="h-5 w-5" />
@@ -1676,7 +1901,9 @@ export default function Home() {
             />
 
             <Kpi
-              title={t.totalKharch}
+              title={
+                t.totalKharch
+              }
               value={kharch}
               icon={
                 <Receipt className="h-5 w-5" />
@@ -1687,7 +1914,6 @@ export default function Home() {
             <div className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-lg">
               <p className="flex items-center justify-between text-sm font-medium text-slate-500">
                 {t.netProfit}
-
                 <Wallet className="h-4 w-4" />
               </p>
 
@@ -1697,9 +1923,10 @@ export default function Home() {
                   ready={hydrated}
                   className="text-2xl font-extrabold"
                   style={{
-                    color: profitUp
-                      ? PROFIT_GREEN
-                      : "#EF4444",
+                    color:
+                      profitUp
+                        ? PROFIT_GREEN
+                        : "#EF4444",
                   }}
                 />
 
@@ -1707,7 +1934,8 @@ export default function Home() {
                   <ArrowUpRight
                     className="h-6 w-6"
                     style={{
-                      color: PROFIT_GREEN,
+                      color:
+                        PROFIT_GREEN,
                     }}
                   />
                 ) : (
@@ -1729,7 +1957,11 @@ export default function Home() {
                     width="100%"
                     height="100%"
                   >
-                    <BarChart data={monthlyData}>
+                    <BarChart
+                      data={
+                        monthlyData
+                      }
+                    >
                       <CartesianGrid
                         strokeDasharray="3 3"
                         stroke="#E2E8F0"
@@ -1749,10 +1981,12 @@ export default function Home() {
                       />
 
                       <Tooltip
-                        formatter={(v) =>
+                        formatter={(
+                          value
+                        ) =>
                           inr(
                             Number(
-                              v ?? 0
+                              value ?? 0
                             )
                           )
                         }
@@ -1781,28 +2015,37 @@ export default function Home() {
 
               <div className="h-72">
                 {hydrated &&
-                  pieData.length > 0 && (
+                  pieData.length >
+                    0 && (
                     <ResponsiveContainer
                       width="100%"
                       height="100%"
                     >
                       <PieChart>
                         <Pie
-                          data={pieData}
+                          data={
+                            pieData
+                          }
                           dataKey="value"
                           nameKey="name"
                           cx="50%"
                           cy="50%"
-                          outerRadius={80}
+                          outerRadius={
+                            80
+                          }
                           label
                         >
                           {pieData.map(
-                            (d) => (
+                            (
+                              item
+                            ) => (
                               <Cell
-                                key={d.key}
+                                key={
+                                  item.key
+                                }
                                 fill={
                                   PIE_COLORS[
-                                    d.key
+                                    item.key
                                   ]
                                 }
                               />
@@ -1811,10 +2054,13 @@ export default function Home() {
                         </Pie>
 
                         <Tooltip
-                          formatter={(v) =>
+                          formatter={(
+                            value
+                          ) =>
                             inr(
                               Number(
-                                v ?? 0
+                                value ??
+                                  0
                               )
                             )
                           }
@@ -1833,32 +2079,47 @@ export default function Home() {
               {t.vendors}
             </h3>
 
-            {vendors.length === 0 ? (
+            {vendors.length ===
+            0 ? (
               <p className="text-sm text-slate-400">
                 {t.noVendors}
               </p>
             ) : (
               <ul className="divide-y divide-slate-100">
                 {vendors.map(
-                  (v, i) => (
+                  (
+                    vendor,
+                    index
+                  ) => (
                     <li
-                      key={v.name}
+                      key={
+                        vendor.name
+                      }
                       className="flex items-center justify-between py-3"
                     >
                       <div>
                         <p className="font-medium">
-                          {i + 1}.{" "}
-                          {v.name}
+                          {index +
+                            1}.{" "}
+                          {
+                            vendor.name
+                          }
                         </p>
 
                         <p className="text-xs text-slate-500">
-                          {v.count}{" "}
-                          {t.billsCount}
+                          {
+                            vendor.count
+                          }{" "}
+                          {
+                            t.billsCount
+                          }
                         </p>
                       </div>
 
                       <p className="font-semibold text-[#1E3A8A]">
-                        {inr(v.total)}
+                        {inr(
+                          vendor.total
+                        )}
                       </p>
                     </li>
                   )
@@ -1894,7 +2155,9 @@ export default function Home() {
         <section className="flex flex-col gap-3 sm:flex-row">
           <button
             type="button"
-            onClick={speakProfit}
+            onClick={
+              speakProfit
+            }
             className="flex-1 rounded-xl bg-[#1E3A8A] px-4 py-3 text-sm font-semibold text-white shadow-lg hover:bg-blue-900"
           >
             {t.speak}
@@ -1902,19 +2165,25 @@ export default function Home() {
 
           <button
             type="button"
-            onClick={sendWhatsApp}
+            onClick={
+              sendWhatsApp
+            }
             className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#25D366] px-4 py-3 text-sm font-semibold text-white shadow-lg hover:bg-green-600"
           >
             <MessageCircle className="h-4 w-4" />
+
             {t.whatsapp}
           </button>
 
           <button
             type="button"
-            onClick={downloadPdf}
+            onClick={
+              downloadPdf
+            }
             className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold shadow-lg hover:bg-slate-50"
           >
             <Download className="h-4 w-4" />
+
             {t.pdf}
           </button>
         </section>
@@ -1931,25 +2200,42 @@ export default function Home() {
 
                 <input
                   value={query}
-                  onChange={(e) =>
+                  onChange={(
+                    event
+                  ) =>
                     setQuery(
-                      e.target.value
+                      event.target
+                        .value
                     )
                   }
-                  placeholder={t.search}
+                  placeholder={
+                    t.search
+                  }
                   className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-[#1E3A8A]"
                 />
               </div>
 
               <select
-                value={filterCat}
-                onChange={(e) =>
-                  setFilterCat(
-                    e.target.value as
-                      | Category
-                      | "All"
-                  )
+                value={
+                  filterCat
                 }
+                onChange={(
+                  event
+                ) => {
+                  const value =
+                    event.target
+                      .value;
+
+                  setFilterCat(
+                    value ===
+                      "All" ||
+                    isCategory(
+                      value
+                    )
+                      ? value
+                      : "All"
+                  );
+                }}
                 className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[#1E3A8A]"
               >
                 <option value="All">
@@ -1957,14 +2243,20 @@ export default function Home() {
                 </option>
 
                 {CATEGORIES.map(
-                  (c) => (
+                  (
+                    category
+                  ) => (
                     <option
-                      key={c}
-                      value={c}
+                      key={
+                        category
+                      }
+                      value={
+                        category
+                      }
                     >
                       {catLabel(
                         t,
-                        c
+                        category
                       )}
                     </option>
                   )
@@ -1973,7 +2265,8 @@ export default function Home() {
             </div>
           </div>
 
-          {bills.length === 0 ? (
+          {bills.length ===
+          0 ? (
             <EmptyBills
               t={t}
               onUpload={() =>
@@ -2012,37 +2305,47 @@ export default function Home() {
                     0 && (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={
+                          5
+                        }
                         className="py-8 text-center text-slate-400"
                       >
-                        {t.noResults}
+                        {
+                          t.noResults
+                        }
                       </td>
                     </tr>
                   )}
 
                   {filtered.map(
-                    (b) => (
+                    (bill) => (
                       <tr
-                        key={b.id}
+                        key={
+                          bill.id
+                        }
                         className="border-b border-slate-50"
                       >
                         <td className="py-3">
-                          {b.date}
+                          {
+                            bill.date
+                          }
                         </td>
 
                         <td className="py-3 font-medium">
-                          {b.shopName}
+                          {
+                            bill.shopName
+                          }
                         </td>
 
                         <td className="py-3">
                           {inr(
-                            b.totalAmount
+                            bill.totalAmount
                           )}
                         </td>
 
                         <td className="py-3">
                           {badge(
-                            b.category
+                            bill.category
                           )}
                         </td>
 
@@ -2051,25 +2354,33 @@ export default function Home() {
                             <button
                               type="button"
                               onClick={() =>
-                                openEdit(b)
+                                openEdit(
+                                  bill
+                                )
                               }
                               className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[#1E3A8A] hover:bg-blue-50"
                             >
                               <Pencil className="h-4 w-4" />
-                              {t.edit}
+
+                              {
+                                t.edit
+                              }
                             </button>
 
                             <button
                               type="button"
                               onClick={() =>
                                 deleteBill(
-                                  b.id
+                                  bill.id
                                 )
                               }
                               className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-red-600 hover:bg-red-50"
                             >
                               <Trash2 className="h-4 w-4" />
-                              {t.delete}
+
+                              {
+                                t.delete
+                              }
                             </button>
                           </div>
                         </td>
@@ -2093,7 +2404,9 @@ export default function Home() {
                 </h3>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  {editing.shopName}
+                  {
+                    editing.shopName
+                  }
                 </p>
               </div>
 
@@ -2111,7 +2424,9 @@ export default function Home() {
             <div className="space-y-3 text-sm">
               <Row
                 label={t.date}
-                value={editing.date}
+                value={
+                  editing.date
+                }
               />
 
               <Row
@@ -2123,28 +2438,47 @@ export default function Home() {
 
               <label className="block">
                 <span className="mb-1.5 block text-slate-500">
-                  {t.category}
+                  {
+                    t.category
+                  }
                 </span>
 
                 <select
                   value={editCat}
-                  onChange={(e) =>
-                    setEditCat(
-                      e.target
-                        .value as Category
-                    )
-                  }
+                  onChange={(
+                    event
+                  ) => {
+                    const value =
+                      event.target
+                        .value;
+
+                    if (
+                      isCategory(
+                        value
+                      )
+                    ) {
+                      setEditCat(
+                        value
+                      );
+                    }
+                  }}
                   className="w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:border-[#1E3A8A]"
                 >
                   {CATEGORIES.map(
-                    (c) => (
+                    (
+                      category
+                    ) => (
                       <option
-                        key={c}
-                        value={c}
+                        key={
+                          category
+                        }
+                        value={
+                          category
+                        }
                       >
                         {catLabel(
                           t,
-                          c
+                          category
                         )}
                       </option>
                     )
@@ -2166,10 +2500,14 @@ export default function Home() {
 
               <button
                 type="button"
-                onClick={saveEdit}
+                onClick={
+                  saveEdit
+                }
                 className="flex-1 rounded-xl bg-[#1E3A8A] px-4 py-2.5 font-semibold text-white hover:bg-blue-900"
               >
-                {t.saveChanges}
+                {
+                  t.saveChanges
+                }
               </button>
             </div>
           </div>
@@ -2181,6 +2519,176 @@ export default function Home() {
           {toast}
         </div>
       )}
+    </div>
+  );
+}
+
+function isApiSuccess(
+  value: unknown
+): value is {
+  success: true;
+  data: unknown;
+} {
+  if (
+    typeof value !==
+      "object" ||
+    value === null
+  ) {
+    return false;
+  }
+
+  const obj =
+    value as Record<
+      string,
+      unknown
+    >;
+
+  return (
+    obj.success === true &&
+    "data" in obj
+  );
+}
+
+function getApiError(
+  value: unknown
+): string | null {
+  if (
+    typeof value !==
+      "object" ||
+    value === null
+  ) {
+    return null;
+  }
+
+  const obj =
+    value as Record<
+      string,
+      unknown
+    >;
+
+  return typeof obj.message ===
+    "string"
+    ? obj.message
+    : null;
+}
+
+function normalizeExtracted(
+  value: unknown
+): Extracted {
+  if (
+    typeof value !==
+      "object" ||
+    value === null
+  ) {
+    throw new Error(
+      "Invalid AI response"
+    );
+  }
+
+  const obj =
+    value as Record<
+      string,
+      unknown
+    >;
+
+  const shopName =
+    typeof obj.shopName ===
+    "string"
+      ? obj.shopName.trim()
+      : "";
+
+  const date =
+    typeof obj.date ===
+    "string"
+      ? obj.date
+      : todayISO();
+
+  const totalAmount =
+    typeof obj.totalAmount ===
+    "number"
+      ? obj.totalAmount
+      : Number(
+          obj.totalAmount
+        );
+
+  const items = Array.isArray(
+    obj.items
+  )
+    ? obj.items.filter(
+        (
+          item
+        ): item is string =>
+          typeof item ===
+          "string"
+      )
+    : [];
+
+  const category =
+    typeof obj.category ===
+      "string" &&
+    isCategory(
+      obj.category
+    )
+      ? obj.category
+      : "Purchase";
+
+  const confidence =
+    typeof obj.confidence ===
+    "number"
+      ? Math.max(
+          0,
+          Math.min(
+            100,
+            Math.round(
+              obj.confidence
+            )
+          )
+        )
+      : 90;
+
+  if (!shopName) {
+    throw new Error(
+      "AI could not identify the shop name"
+    );
+  }
+
+  if (
+    !Number.isFinite(
+      totalAmount
+    ) ||
+    totalAmount < 0
+  ) {
+    throw new Error(
+      "AI returned an invalid bill amount"
+    );
+  }
+
+  return {
+    shopName,
+    date,
+    totalAmount,
+    items,
+    category,
+    confidence,
+  };
+}
+
+function StatCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5 shadow-sm">
+      <p className="text-2xl font-extrabold text-[#1E3A8A] sm:text-3xl">
+        {value}
+      </p>
+
+      <p className="mt-1 text-sm font-medium text-slate-500">
+        {label}
+      </p>
     </div>
   );
 }
@@ -2207,7 +2715,7 @@ function EmptyBills({
           height="108"
           rx="10"
           fill="#EFF6FF"
-          stroke="#1E3A8A"
+          stroke={PRIMARY}
           strokeWidth="2"
         />
 
@@ -2251,7 +2759,7 @@ function EmptyBills({
           cx="132"
           cy="108"
           r="22"
-          fill="#10B981"
+          fill={PROFIT_GREEN}
         />
 
         <path
@@ -2332,47 +2840,53 @@ function CountInr({
     const start =
       performance.now();
 
-    const dur = 900;
+    const duration = 900;
 
-    let raf = 0;
+    let animationFrame = 0;
 
-    const ease = (p: number) =>
-      1 - (1 - p) ** 3;
+    const ease = (
+      progress: number
+    ) =>
+      1 -
+      (1 - progress) ** 3;
 
     const tick = (
       now: number
     ) => {
-      const p = Math.min(
-        1,
-        (now - start) / dur
-      );
+      const progress =
+        Math.min(
+          1,
+          (now - start) /
+            duration
+        );
 
       setShown(
         Math.round(
           from +
             (to - from) *
-              ease(p)
+              ease(progress)
         )
       );
 
-      if (p < 1) {
-        raf =
+      if (progress < 1) {
+        animationFrame =
           requestAnimationFrame(
             tick
           );
       } else {
-        fromRef.current = to;
+        fromRef.current =
+          to;
       }
     };
 
-    raf =
+    animationFrame =
       requestAnimationFrame(
         tick
       );
 
     return () =>
       cancelAnimationFrame(
-        raf
+        animationFrame
       );
   }, [value, ready]);
 
