@@ -3,9 +3,11 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+function getOpenAIClient(): OpenAI {
+  return new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+}
 
 const ALLOWED_TYPES = new Set([
   "image/jpeg",
@@ -247,7 +249,7 @@ export async function POST(
       "application/pdf";
 
     const response =
-      await openai.responses.create(
+      await getOpenAIClient().responses.create(
         {
           model:
             process.env.OPENAI_MODEL ??
