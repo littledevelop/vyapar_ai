@@ -46,6 +46,9 @@ import {
 } from "recharts";
 
 const STORAGE_KEY = "vyapar_bills";
+const USER_KEY = "vyapar_active_user";
+const REGISTERED_USERS_KEY = "vyapar_registered_users";
+const USER_BILLS_PREFIX = "vyapar_bills_user_";
 const LANG_KEY = "vyapar_lang";
 
 const PRIMARY = "#1E3A8A";
@@ -64,6 +67,30 @@ const CATEGORIES = ["Sales", "Purchase", "Kharch"] as const;
 type Category = (typeof CATEGORIES)[number];
 
 type Lang = "EN" | "HI" | "GU";
+
+type UserProfile = {
+  id: string;
+  name: string;
+  businessName: string;
+};
+
+type RegisteredUser = UserProfile & {
+  email: string;
+  password: string;
+};
+
+const USER_PROFILES: UserProfile[] = [
+  {
+    id: "owner",
+    name: "Rajesh Patel",
+    businessName: "Patel Kirana",
+  },
+  {
+    id: "meena",
+    name: "Meena Shah",
+    businessName: "Shah Medical",
+  },
+];
 
 const PIE_COLORS: Record<Category, string> = {
   Sales: "#10B981",
@@ -357,6 +384,30 @@ const copy: Record<Lang, Copy> = {
 
 function isLang(value: string | null): value is Lang {
   return value === "EN" || value === "HI" || value === "GU";
+}
+
+function isUserId(
+  value: string | null,
+  profiles: UserProfile[] = USER_PROFILES
+): value is string {
+  return profiles.some((profile) => profile.id === value);
+}
+
+function isRegisteredUser(value: unknown): value is RegisteredUser {
+  if (typeof value !== "object" || value === null) return false;
+
+  const user = value as Partial<RegisteredUser>;
+  return (
+    typeof user.id === "string" &&
+    typeof user.name === "string" &&
+    typeof user.businessName === "string" &&
+    typeof user.email === "string" &&
+    typeof user.password === "string"
+  );
+}
+
+function billsStorageKey(userId: string): string {
+  return `${USER_BILLS_PREFIX}${userId}`;
 }
 
 function isCategory(value: string): value is Category {
@@ -720,6 +771,26 @@ function downloadSampleGujaratiBill(): void {
 export default function Home() {
   const [lang, setLang] = useState<Lang>("EN");
 
+  const [userId, setUserId] = useState<string | null>(null);
+
+  const [loginSelection, setLoginSelection] =
+    useState("owner");
+
+  const [registeredUsers, setRegisteredUsers] =
+    useState<RegisteredUser[]>([]);
+
+  const [authMode, setAuthMode] =
+    useState<"login" | "register">("login");
+
+  const [registration, setRegistration] = useState({
+    name: "",
+    businessName: "",
+    email: "",
+    password: "",
+  });
+
+  const [authError, setAuthError] = useState("");
+
   const t = copy[lang];
 
   const fileRef =
@@ -759,74 +830,80 @@ export default function Home() {
     useState<Category>("Sales");
 
   useEffect(() => {
-    const initialize = () => {
+    const timer = window.setTimeout(() => {
       try {
-        const savedLang =
-          localStorage.getItem(LANG_KEY);
+        const savedLang = localStorage.getItem(LANG_KEY);
+        const savedUser = localStorage.getItem(USER_KEY);
+        const savedRegisteredUsers = localStorage.getItem(
+          REGISTERED_USERS_KEY
+        );
+        const parsedUsers: unknown = savedRegisteredUsers
+          ? JSON.parse(savedRegisteredUsers)
+          : [];
+        const storedUsers = Array.isArray(parsedUsers)
+          ? parsedUsers.filter(isRegisteredUser)
+          : [];
+        const profiles = [
+          ...USER_PROFILES,
+          ...storedUsers,
+        ];
 
-        if (isLang(savedLang)) {
-          setLang(savedLang);
+        if (isLang(savedLang)) setLang(savedLang);
+        setRegisteredUsers(storedUsers);
+        if (isUserId(savedUser, profiles)) setUserId(savedUser);
+      } catch {
+        // Ignore storage errors.
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const initialize = () => {
+      if (!userId) {
+        setBills([]);
+        setHydrated(true);
+        return;
+      }
+
+      try {
+        const profileKey = billsStorageKey(userId);
+        let raw = localStorage.getItem(profileKey);
+
+        if (!raw && userId === "owner") {
+          raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) localStorage.setItem(profileKey, raw);
         }
-
-        const raw =
-          localStorage.getItem(STORAGE_KEY);
 
         if (!raw) {
-          const seed = sampleBills();
-
-          localStorage.setItem(
-            STORAGE_KEY,
-            JSON.stringify(seed)
-          );
-
+          const seed = userId === "owner" ? sampleBills() : [];
+          localStorage.setItem(profileKey, JSON.stringify(seed));
           setBills(seed);
         } else {
-          const parsed: unknown =
-            JSON.parse(raw);
-
-          if (Array.isArray(parsed)) {
-            setBills(parsed.filter(isBill));
-          } else {
-            const seed = sampleBills();
-
-            localStorage.setItem(
-              STORAGE_KEY,
-              JSON.stringify(seed)
-            );
-
-            setBills(seed);
-          }
+          const parsed: unknown = JSON.parse(raw);
+          setBills(Array.isArray(parsed) ? parsed.filter(isBill) : []);
         }
       } catch {
-        const seed = sampleBills();
-
-        try {
-          localStorage.setItem(
-            STORAGE_KEY,
-            JSON.stringify(seed)
-          );
-        } catch {
-          // Ignore storage errors.
-        }
-
-        setBills(seed);
+        setBills([]);
       } finally {
         setHydrated(true);
       }
     };
 
     const timer = window.setTimeout(initialize, 0);
-
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [userId]);
 
   const persist = useCallback(
     (next: Bill[]) => {
       setBills(next);
 
+      if (!userId) return;
+
       try {
         localStorage.setItem(
-          STORAGE_KEY,
+          billsStorageKey(userId),
           JSON.stringify(next)
         );
       } catch (error) {
@@ -836,8 +913,86 @@ export default function Home() {
         );
       }
     },
-    []
+    [userId]
   );
+
+  const changeUser = (nextUserId: string): void => {
+    if (!isUserId(nextUserId, allProfiles)) return;
+
+    setHydrated(false);
+    setUserId(nextUserId);
+    setLoginSelection(nextUserId);
+    setBills([]);
+    setExtracted(null);
+    setPreview(null);
+    setEditing(null);
+
+    try {
+      localStorage.setItem(USER_KEY, nextUserId);
+    } catch {
+      // Ignore storage errors.
+    }
+  };
+
+  const logout = (): void => {
+    setUserId(null);
+    setBills([]);
+    setExtracted(null);
+    setPreview(null);
+    setEditing(null);
+
+    try {
+      localStorage.removeItem(USER_KEY);
+    } catch {
+      // Ignore storage errors.
+    }
+  };
+
+  const registerUser = (): void => {
+    const name = registration.name.trim();
+    const businessName = registration.businessName.trim();
+    const email = registration.email.trim().toLowerCase();
+    const password = registration.password;
+
+    if (!name || !businessName || !email || password.length < 6) {
+      setAuthError("Enter all fields. Password must be at least 6 characters.");
+      return;
+    }
+
+    if (registeredUsers.some((user) => user.email === email)) {
+      setAuthError("An account with this email already exists.");
+      return;
+    }
+
+    const newUser: RegisteredUser = {
+      id: `user-${Date.now()}`,
+      name,
+      businessName,
+      email,
+      password,
+    };
+    const nextUsers = [...registeredUsers, newUser];
+
+    setRegisteredUsers(nextUsers);
+    setLoginSelection(newUser.id);
+    setRegistration({
+      name: "",
+      businessName: "",
+      email: "",
+      password: "",
+    });
+    setAuthError("");
+    setAuthMode("login");
+
+    try {
+      localStorage.setItem(
+        REGISTERED_USERS_KEY,
+        JSON.stringify(nextUsers)
+      );
+    } catch {
+      setAuthError("Unable to save your account in this browser.");
+    }
+  };
 
   const showToast = useCallback(
     (message: string) => {
@@ -1628,6 +1783,119 @@ export default function Home() {
     );
   };
 
+  const allProfiles: UserProfile[] = [
+    ...USER_PROFILES,
+    ...registeredUsers,
+  ];
+
+  const activeProfile = allProfiles.find(
+    (profile) => profile.id === userId
+  );
+
+  if (hydrated && !userId) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 text-slate-900">
+        <section className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-xl">
+          <p className="text-xl font-bold" style={{ color: PRIMARY }}>
+            VyaparAI <span className="font-extrabold">PRO</span>
+          </p>
+          <h1 className="mt-8 text-2xl font-bold">Login to your business</h1>
+          <p className="mt-2 text-sm text-slate-500">
+            Only one user can be logged in at a time. Your bills stay separate.
+          </p>
+          <div className="mt-6 flex rounded-lg bg-slate-100 p-1 text-sm font-semibold">
+            {(["login", "register"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => {
+                  setAuthMode(mode);
+                  setAuthError("");
+                }}
+                className={`flex-1 rounded-md px-3 py-2 ${
+                  authMode === mode
+                    ? "bg-white text-[#1E3A8A] shadow-sm"
+                    : "text-slate-500"
+                }`}
+              >
+                {mode === "login" ? "Login" : "Register"}
+              </button>
+            ))}
+          </div>
+
+          {authMode === "login" ? (
+            <>
+              <label className="mt-6 block text-sm font-semibold text-slate-700">
+                Select user
+                <select
+                  value={loginSelection}
+                  onChange={(event) =>
+                    setLoginSelection(event.target.value)
+                  }
+                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-[#1E3A8A]"
+                >
+                  {allProfiles.map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.name} · {profile.businessName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={() => changeUser(loginSelection)}
+                className="mt-6 w-full rounded-lg bg-[#1E3A8A] px-4 py-3 font-semibold text-white hover:bg-blue-900"
+              >
+                Login
+              </button>
+            </>
+          ) : (
+            <div className="mt-6 space-y-3">
+              {(
+                [
+                  ["name", "Full name", "text"],
+                  ["businessName", "Business name", "text"],
+                  ["email", "Email", "email"],
+                  ["password", "Password (6+ characters)", "password"],
+                ] as const
+              ).map(([field, label, type]) => (
+                <label
+                  key={field}
+                  className="block text-sm font-semibold text-slate-700"
+                >
+                  {label}
+                  <input
+                    type={type}
+                    value={registration[field]}
+                    onChange={(event) =>
+                      setRegistration({
+                        ...registration,
+                        [field]: event.target.value,
+                      })
+                    }
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal outline-none focus:border-[#1E3A8A]"
+                  />
+                </label>
+              ))}
+              <button
+                type="button"
+                onClick={registerUser}
+                className="w-full rounded-lg bg-[#1E3A8A] px-4 py-3 font-semibold text-white hover:bg-blue-900"
+              >
+                Create account
+              </button>
+            </div>
+          )}
+          {authError && (
+            <p className="mt-3 text-sm font-medium text-red-600">
+              {authError}
+            </p>
+          )}
+        </section>
+      </main>
+    );
+  }
+
   return (
     <div
       className="min-h-screen bg-slate-50 text-slate-900"
@@ -1655,6 +1923,21 @@ export default function Home() {
           </a>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            <span className="hidden text-right text-xs font-semibold text-slate-700 sm:block">
+              {activeProfile?.name}
+              <span className="block text-[10px] font-normal text-slate-500">
+                {activeProfile?.businessName}
+              </span>
+            </span>
+
+            <button
+              type="button"
+              onClick={logout}
+              className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              Logout
+            </button>
+
             <div className="flex overflow-hidden rounded-lg border border-slate-200 bg-slate-50 text-xs font-semibold sm:text-sm">
               {(
                 [
