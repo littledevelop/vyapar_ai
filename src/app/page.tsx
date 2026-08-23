@@ -1878,7 +1878,7 @@ export default function Home() {
                 <input
                   type="email"
                   value={loginEmail}
-                  placeholder="ramesh@patelkirana.com"
+                    placeholder="you@example.com"
                   onChange={(event) => setLoginEmail(event.target.value)}
                   className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal outline-none focus:border-[#1E3A8A]"
                 />
@@ -1890,6 +1890,7 @@ export default function Home() {
                   <input
                     type={showLoginPassword ? "text" : "password"}
                     value={loginPassword}
+                    placeholder="Enter your password"
                     onChange={(event) => setLoginPassword(event.target.value)}
                     className="w-full rounded-lg border border-slate-300 px-3 py-2.5 pr-11 font-normal outline-none focus:border-[#1E3A8A]"
                   />
@@ -1924,7 +1925,7 @@ export default function Home() {
                 {registrationErrors.email && <span className="mt-1 block text-sm text-red-600">{registrationErrors.email}</span>}
               </label>
               <label className="block text-sm font-semibold text-slate-700">Password (required)
-                <span className="relative mt-1 block"><input type={showRegisterPassword ? "text" : "password"} value={registration.password} onChange={(event) => setRegistration({ ...registration, password: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 pr-11 font-normal outline-none focus:border-[#1E3A8A]" /><button type="button" aria-label="Show password" onClick={() => setShowRegisterPassword(!showRegisterPassword)} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-500">{showRegisterPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></span>
+                <span className="relative mt-1 block"><input type={showRegisterPassword ? "text" : "password"} value={registration.password} placeholder="Create a password (6+ characters)" onChange={(event) => setRegistration({ ...registration, password: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 pr-11 font-normal outline-none focus:border-[#1E3A8A]" /><button type="button" aria-label="Show password" onClick={() => setShowRegisterPassword(!showRegisterPassword)} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-500">{showRegisterPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></span>
                 {registrationErrors.password && <span className="mt-1 block text-sm text-red-600">{registrationErrors.password}</span>}
               </label>
               <label className="block text-sm font-semibold text-slate-700">Shop Name (optional)
