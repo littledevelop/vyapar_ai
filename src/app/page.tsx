@@ -17,6 +17,8 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   Download,
+  Eye,
+  EyeOff,
   FileText,
   MessageCircle,
   Pencil,
@@ -30,6 +32,7 @@ import {
   X,
   IndianRupee,
 } from "lucide-react";
+import { mockOCR } from "../lib/ai";
 
 import {
   Bar,
@@ -46,7 +49,7 @@ import {
 } from "recharts";
 
 const STORAGE_KEY = "vyapar_bills";
-const USER_KEY = "vyapar_active_user";
+const USER_KEY = "vyapar_user";
 const REGISTERED_USERS_KEY = "vyapar_registered_users";
 const USER_BILLS_PREFIX = "vyapar_bills_user_";
 const LANG_KEY = "vyapar_lang";
@@ -77,6 +80,11 @@ type UserProfile = {
 type RegisteredUser = UserProfile & {
   email: string;
   password: string;
+};
+
+type AuthUser = UserProfile & {
+  email: string;
+  isLoggedIn: boolean;
 };
 
 const USER_PROFILES: UserProfile[] = [
@@ -515,19 +523,6 @@ function sampleBills(): Bill[] {
   ];
 }
 
-function readImageAsDataUrl(file: File): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-
-    reader.onload = () => resolve(String(reader.result));
-
-    reader.onerror = () =>
-      reject(new Error("Unable to read image"));
-
-    reader.readAsDataURL(file);
-  });
-}
-
 function last6MonthKeys(
   lang: Lang
 ): Array<{ key: string; label: string }> {
@@ -773,8 +768,17 @@ export default function Home() {
 
   const [userId, setUserId] = useState<string | null>(null);
 
-  const [loginSelection, setLoginSelection] =
-    useState("owner");
+  const [authUser, setAuthUser] =
+    useState<AuthUser | null>(null);
+
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+  const [loginErrors, setLoginErrors] = useState({
+    email: "",
+    password: "",
+  });
 
   const [registeredUsers, setRegisteredUsers] =
     useState<RegisteredUser[]>([]);
@@ -784,12 +788,16 @@ export default function Home() {
 
   const [registration, setRegistration] = useState({
     name: "",
-    businessName: "",
+    shopName: "",
     email: "",
     password: "",
   });
 
-  const [authError, setAuthError] = useState("");
+  const [registrationErrors, setRegistrationErrors] = useState({
+    name: "",
+    email: "",
+    password: "",
+  });
 
   const t = copy[lang];
 
@@ -843,14 +851,37 @@ export default function Home() {
         const storedUsers = Array.isArray(parsedUsers)
           ? parsedUsers.filter(isRegisteredUser)
           : [];
-        const profiles = [
-          ...USER_PROFILES,
-          ...storedUsers,
-        ];
-
         if (isLang(savedLang)) setLang(savedLang);
         setRegisteredUsers(storedUsers);
-        if (isUserId(savedUser, profiles)) setUserId(savedUser);
+        if (savedUser) {
+          const parsedUser: unknown = JSON.parse(savedUser);
+          if (
+            typeof parsedUser === "object" &&
+            parsedUser !== null &&
+            (parsedUser as AuthUser).isLoggedIn === true
+          ) {
+            const currentUser = parsedUser as AuthUser;
+            setAuthUser(currentUser);
+            setUserId(currentUser.id);
+          } else if (isUserId(savedUser, [
+            ...USER_PROFILES,
+            ...storedUsers,
+          ])) {
+            const profile = [
+              ...USER_PROFILES,
+              ...storedUsers,
+            ].find((item) => item.id === savedUser);
+            if (profile) {
+              const currentUser: AuthUser = {
+                ...profile,
+                email: `${profile.id}@vyapar.ai`,
+                isLoggedIn: true,
+              };
+              setAuthUser(currentUser);
+              setUserId(currentUser.id);
+            }
+          }
+        }
       } catch {
         // Ignore storage errors.
       }
@@ -916,25 +947,70 @@ export default function Home() {
     [userId]
   );
 
-  const changeUser = (nextUserId: string): void => {
-    if (!isUserId(nextUserId, allProfiles)) return;
-
+  const saveSession = (user: AuthUser): void => {
     setHydrated(false);
-    setUserId(nextUserId);
-    setLoginSelection(nextUserId);
+    setAuthUser(user);
+    setUserId(user.id);
     setBills([]);
     setExtracted(null);
     setPreview(null);
     setEditing(null);
 
     try {
-      localStorage.setItem(USER_KEY, nextUserId);
+      localStorage.setItem(USER_KEY, JSON.stringify(user));
     } catch {
       // Ignore storage errors.
     }
   };
 
+  const loginUser = (): void => {
+    const email = loginEmail.trim().toLowerCase();
+    const errors = {
+      email: email ? "" : "Email is required",
+      password: loginPassword ? "" : "Password is required",
+    };
+    setLoginErrors(errors);
+
+    if (errors.email || errors.password) return;
+    if (loginPassword.length < 6) {
+      setLoginErrors({ email: "", password: "Password must be at least 6 characters" });
+      return;
+    }
+
+    const savedUser = registeredUsers.find(
+      (user) => user.email === email
+    );
+    const emailName = email.split("@")[0]
+      .replace(/[._-]+/g, " ")
+      .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    const user: AuthUser = {
+      id: savedUser?.id ?? `user-${email.replace(/[^a-z0-9]/g, "-")}`,
+      name: savedUser?.name ?? emailName,
+      businessName: savedUser?.businessName ?? "My Kirana Store",
+      email,
+      isLoggedIn: true,
+    };
+
+    saveSession(user);
+    setLoginEmail("");
+    setLoginPassword("");
+    showToast(`Welcome, ${user.name}!`);
+  };
+
+  const demoLogin = (): void => {
+    const user: AuthUser = {
+      id: "demo",
+      name: "Demo User",
+      businessName: "Patel Kirana & General Store",
+      email: "demo@vyapar.ai",
+      isLoggedIn: true,
+    };
+    saveSession(user);
+    showToast(`Welcome, ${user.name}!`);
+  };
+
   const logout = (): void => {
+    setAuthUser(null);
     setUserId(null);
     setBills([]);
     setExtracted(null);
@@ -950,22 +1026,29 @@ export default function Home() {
 
   const registerUser = (): void => {
     const name = registration.name.trim();
-    const businessName = registration.businessName.trim();
+    const businessName = registration.shopName.trim();
     const email = registration.email.trim().toLowerCase();
     const password = registration.password;
+    const errors = {
+      name: name.length >= 3 ? "" : "Full Name must be at least 3 characters",
+      email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? "" : "Enter a valid email",
+      password: password.length >= 6 ? "" : "Password must be at least 6 characters",
+    };
+    setRegistrationErrors(errors);
 
-    if (!name || !businessName || !email || password.length < 6) {
-      setAuthError("Enter all fields. Password must be at least 6 characters.");
-      return;
-    }
+    if (errors.name || errors.email || errors.password) return;
 
     if (registeredUsers.some((user) => user.email === email)) {
-      setAuthError("An account with this email already exists.");
+      setRegistrationErrors({
+        name: "",
+        email: "An account with this email already exists.",
+        password: "",
+      });
       return;
     }
 
     const newUser: RegisteredUser = {
-      id: `user-${Date.now()}`,
+      id: `user-${email.replace(/[^a-z0-9]/g, "-")}`,
       name,
       businessName,
       email,
@@ -974,23 +1057,32 @@ export default function Home() {
     const nextUsers = [...registeredUsers, newUser];
 
     setRegisteredUsers(nextUsers);
-    setLoginSelection(newUser.id);
     setRegistration({
       name: "",
-      businessName: "",
+      shopName: "",
       email: "",
       password: "",
     });
-    setAuthError("");
-    setAuthMode("login");
 
     try {
       localStorage.setItem(
         REGISTERED_USERS_KEY,
         JSON.stringify(nextUsers)
       );
+      saveSession({
+        id: newUser.id,
+        name: newUser.name,
+        businessName: newUser.businessName,
+        email: newUser.email,
+        isLoggedIn: true,
+      });
+      showToast(`Welcome, ${name}!`);
     } catch {
-      setAuthError("Unable to save your account in this browser.");
+      setRegistrationErrors({
+        name: "",
+        email: "Unable to save your account in this browser.",
+        password: "",
+      });
     }
   };
 
@@ -1037,6 +1129,18 @@ export default function Home() {
   const profit =
     sales - purchase - kharch;
 
+  const dashboardSales =
+    bills.length > 0 ? sales : 1005;
+
+  const dashboardPurchase =
+    bills.length > 0 ? purchase : 27350;
+
+  const dashboardKharch =
+    bills.length > 0 ? kharch : 0;
+
+  const dashboardProfit =
+    dashboardSales - dashboardPurchase - dashboardKharch;
+
   const profitUp = profit >= 0;
 
   const monthlyData = useMemo(() => {
@@ -1070,25 +1174,25 @@ export default function Home() {
         {
           name: t.catSales,
           key: "Sales" as Category,
-          value: sales,
+          value: dashboardSales,
         },
         {
           name: t.catPurchase,
           key: "Purchase" as Category,
-          value: purchase,
+          value: dashboardPurchase,
         },
         {
           name: t.catKharch,
           key: "Kharch" as Category,
-          value: kharch,
+          value: dashboardKharch,
         },
       ].filter(
         (item) => item.value > 0
       ),
     [
-      sales,
-      purchase,
-      kharch,
+      dashboardSales,
+      dashboardPurchase,
+      dashboardKharch,
       t,
     ]
   );
@@ -1360,70 +1464,20 @@ export default function Home() {
     setExtracted(null);
 
     try {
-      const isImage =
-        file.type.startsWith(
-          "image/"
-        );
-
-      let dataUrl:
-        | string
-        | undefined;
-
-      if (isImage) {
-        dataUrl =
-          await readImageAsDataUrl(
-            file
-          );
-
-        setPreview(dataUrl);
-      } else {
-        setPreview(null);
-      }
-
-      const formData =
-        new FormData();
-
-      formData.append(
-        "file",
-        file
+      await new Promise((resolve) =>
+        window.setTimeout(resolve, 1000)
       );
 
-      const response =
-        await fetch(
-          "/api/extract-bill",
-          {
-            method: "POST",
-            body: formData,
-          }
-        );
+      const result = mockOCR();
+      const previewUrl = URL.createObjectURL(file);
 
-      const result: unknown =
-        await response.json();
-
-      if (
-        !response.ok ||
-        !isApiSuccess(result)
-      ) {
-        throw new Error(
-          getApiError(result) ||
-            "AI could not read the bill"
-        );
-      }
-
-      const data =
-        normalizeExtracted(
-          result.data
-        );
-
+      setPreview(previewUrl);
       setExtracted({
-        ...data,
-        imageDataUrl:
-          dataUrl,
+        ...result,
+        imageDataUrl: previewUrl,
       });
 
-      showToast(
-        "AI successfully extracted the bill"
-      );
+      showToast("Bill read successfully");
     } catch (error) {
       console.error(error);
 
@@ -1783,14 +1837,7 @@ export default function Home() {
     );
   };
 
-  const allProfiles: UserProfile[] = [
-    ...USER_PROFILES,
-    ...registeredUsers,
-  ];
-
-  const activeProfile = allProfiles.find(
-    (profile) => profile.id === userId
-  );
+  const activeProfile = authUser;
 
   if (hydrated && !userId) {
     return (
@@ -1810,7 +1857,8 @@ export default function Home() {
                 type="button"
                 onClick={() => {
                   setAuthMode(mode);
-                  setAuthError("");
+                  setLoginErrors({ email: "", password: "" });
+                  setRegistrationErrors({ name: "", email: "", password: "" });
                 }}
                 className={`flex-1 rounded-md px-3 py-2 ${
                   authMode === mode
@@ -1826,70 +1874,71 @@ export default function Home() {
           {authMode === "login" ? (
             <>
               <label className="mt-6 block text-sm font-semibold text-slate-700">
-                Select user
-                <select
-                  value={loginSelection}
-                  onChange={(event) =>
-                    setLoginSelection(event.target.value)
-                  }
-                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-[#1E3A8A]"
-                >
-                  {allProfiles.map((profile) => (
-                    <option key={profile.id} value={profile.id}>
-                      {profile.name} · {profile.businessName}
-                    </option>
-                  ))}
-                </select>
+                Email
+                <input
+                  type="email"
+                  value={loginEmail}
+                  placeholder="ramesh@patelkirana.com"
+                  onChange={(event) => setLoginEmail(event.target.value)}
+                  className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal outline-none focus:border-[#1E3A8A]"
+                />
+                {loginErrors.email && <span className="mt-1 block text-sm text-red-600">{loginErrors.email}</span>}
+              </label>
+              <label className="mt-4 block text-sm font-semibold text-slate-700">
+                Password
+                <span className="relative mt-2 block">
+                  <input
+                    type={showLoginPassword ? "text" : "password"}
+                    value={loginPassword}
+                    onChange={(event) => setLoginPassword(event.target.value)}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2.5 pr-11 font-normal outline-none focus:border-[#1E3A8A]"
+                  />
+                  <button type="button" aria-label="Show password" onClick={() => setShowLoginPassword(!showLoginPassword)} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-500">
+                    {showLoginPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </span>
+                {loginErrors.password && <span className="mt-1 block text-sm text-red-600">{loginErrors.password}</span>}
               </label>
               <button
                 type="button"
-                onClick={() => changeUser(loginSelection)}
-                className="mt-6 w-full rounded-lg bg-[#1E3A8A] px-4 py-3 font-semibold text-white hover:bg-blue-900"
+                onClick={loginUser}
+                className="mt-6 w-full rounded-full bg-[#0f172a] px-4 py-3 font-bold text-white shadow-lg hover:scale-105"
               >
                 Login
               </button>
+              <button type="button" onClick={demoLogin} className="mt-3 w-full rounded-full border border-slate-300 px-4 py-3 font-bold text-slate-700 hover:scale-105">
+                Try Demo Account
+              </button>
+              <p className="mt-4 text-center text-sm text-slate-500">
+                Don&apos;t have an account? <button type="button" onClick={() => setAuthMode("register")} className="font-bold text-[#1E3A8A]">Register</button>
+              </p>
             </>
           ) : (
             <div className="mt-6 space-y-3">
-              {(
-                [
-                  ["name", "Full name", "text"],
-                  ["businessName", "Business name", "text"],
-                  ["email", "Email", "email"],
-                  ["password", "Password (6+ characters)", "password"],
-                ] as const
-              ).map(([field, label, type]) => (
-                <label
-                  key={field}
-                  className="block text-sm font-semibold text-slate-700"
-                >
-                  {label}
-                  <input
-                    type={type}
-                    value={registration[field]}
-                    onChange={(event) =>
-                      setRegistration({
-                        ...registration,
-                        [field]: event.target.value,
-                      })
-                    }
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal outline-none focus:border-[#1E3A8A]"
-                  />
-                </label>
-              ))}
+              <label className="block text-sm font-semibold text-slate-700">Full Name (required)
+                <input type="text" placeholder="Ramesh Bhai Patel" value={registration.name} onChange={(event) => setRegistration({ ...registration, name: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal outline-none focus:border-[#1E3A8A]" />
+                {registrationErrors.name && <span className="mt-1 block text-sm text-red-600">{registrationErrors.name}</span>}
+              </label>
+              <label className="block text-sm font-semibold text-slate-700">Email (required)
+                <input type="email" placeholder="ramesh@patelkirana.com" value={registration.email} onChange={(event) => setRegistration({ ...registration, email: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal outline-none focus:border-[#1E3A8A]" />
+                {registrationErrors.email && <span className="mt-1 block text-sm text-red-600">{registrationErrors.email}</span>}
+              </label>
+              <label className="block text-sm font-semibold text-slate-700">Password (required)
+                <span className="relative mt-1 block"><input type={showRegisterPassword ? "text" : "password"} value={registration.password} onChange={(event) => setRegistration({ ...registration, password: event.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 pr-11 font-normal outline-none focus:border-[#1E3A8A]" /><button type="button" aria-label="Show password" onClick={() => setShowRegisterPassword(!showRegisterPassword)} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-500">{showRegisterPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></span>
+                {registrationErrors.password && <span className="mt-1 block text-sm text-red-600">{registrationErrors.password}</span>}
+              </label>
+              <label className="block text-sm font-semibold text-slate-700">Shop Name (optional)
+                <input type="text" placeholder="Patel Kirana & General Store" value={registration.shopName} onChange={(event) => setRegistration({ ...registration, shopName: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal outline-none focus:border-[#1E3A8A]" />
+              </label>
               <button
                 type="button"
                 onClick={registerUser}
-                className="w-full rounded-lg bg-[#1E3A8A] px-4 py-3 font-semibold text-white hover:bg-blue-900"
+                className="w-full rounded-full bg-[#0f172a] px-4 py-3 font-bold text-white shadow-lg hover:scale-105"
               >
                 Create account
               </button>
+              <p className="text-center text-sm text-slate-500">Already have an account? <button type="button" onClick={() => setAuthMode("login")} className="font-bold text-[#1E3A8A]">Login</button></p>
             </div>
-          )}
-          {authError && (
-            <p className="mt-3 text-sm font-medium text-red-600">
-              {authError}
-            </p>
           )}
         </section>
       </main>
@@ -1923,22 +1972,21 @@ export default function Home() {
           </a>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <span className="hidden text-right text-xs font-semibold text-slate-700 sm:block">
-              {activeProfile?.name}
-              <span className="block text-[10px] font-normal text-slate-500">
-                {activeProfile?.businessName}
-              </span>
-            </span>
+            <details className="relative">
+              <summary className="flex cursor-pointer list-none items-center gap-2 rounded-full border border-slate-200 px-2 py-1.5 text-left text-xs font-semibold text-slate-700 shadow-sm">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#0f172a] font-bold text-white">
+                  {activeProfile?.name.charAt(0).toUpperCase()}
+                </span>
+                <span className="max-w-24 truncate">{activeProfile?.name}</span>
+              </summary>
+              <div className="absolute right-0 top-12 z-50 min-w-48 rounded-xl border border-slate-200 bg-white p-3 shadow-2xl">
+                <p className="text-xs font-semibold text-slate-700">{activeProfile?.businessName}</p>
+                <p className="mt-1 truncate text-xs text-slate-500">{activeProfile?.email}</p>
+                <button type="button" onClick={logout} className="mt-3 w-full rounded-full bg-[#0f172a] px-3 py-2 text-xs font-bold text-white shadow-lg hover:scale-105">Logout</button>
+              </div>
+            </details>
 
-            <button
-              type="button"
-              onClick={logout}
-              className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-            >
-              Logout
-            </button>
-
-            <div className="flex overflow-hidden rounded-lg border border-slate-200 bg-slate-50 text-xs font-semibold sm:text-sm">
+            <div className="flex w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-50 text-xs font-semibold sm:w-auto sm:text-sm">
               {(
                 [
                   "EN",
@@ -1954,7 +2002,7 @@ export default function Home() {
                       code
                     )
                   }
-                  className={`px-2.5 py-1.5 sm:px-3 ${
+                  className={`flex-1 px-3 py-1.5 text-center sm:flex-none sm:px-3 ${
                     lang === code
                       ? "bg-[#1E3A8A] text-white"
                       : "text-slate-600 hover:bg-white"
@@ -1967,7 +2015,7 @@ export default function Home() {
 
             <a
               href="#upload"
-              className="rounded-xl bg-[#1E3A8A] px-3 py-2 text-xs font-semibold text-white shadow-lg shadow-blue-900/20 hover:bg-blue-900 sm:px-4 sm:text-sm"
+              className="rounded-full bg-[#1E3A8A] px-3 py-2 text-xs font-semibold text-white shadow-lg shadow-blue-900/20 transition hover:scale-105 hover:bg-blue-900 sm:px-4 sm:text-sm"
             >
               {t.cta}
             </a>
@@ -1984,12 +2032,12 @@ export default function Home() {
             {t.tagline}
           </p>
 
-          <h1 className="max-w-3xl text-3xl font-extrabold leading-tight tracking-tight text-slate-900 sm:text-5xl">
-            {t.heroTitle}
+          <h1 className="max-w-4xl text-4xl font-black leading-tight tracking-tight text-slate-900 sm:text-6xl">
+            VyaparAI PRO - AI for Bharat&apos;s Kirana
           </h1>
 
           <p className="mt-4 max-w-2xl text-base text-slate-600 sm:text-lg">
-            {t.heroSub}
+            Upload Gujarati/Hindi/English bill photo. AI auto-reads ₹ total, shop name, items in 2 seconds.
           </p>
 
           <div className="mt-8 grid gap-4 sm:grid-cols-3">
@@ -2032,16 +2080,16 @@ export default function Home() {
                 event.dataTransfer.files
               );
             }}
-            className={`rounded-3xl border-2 border-dashed bg-white p-8 text-center shadow-lg transition ${
+            className={`rounded-3xl border-2 border-dashed border-blue-500 bg-blue-50 p-8 text-center shadow-lg transition ${
               dragOver
                 ? "border-[#1E3A8A] bg-blue-50"
-                : "border-slate-200"
+                : "border-blue-500"
             }`}
           >
-            <Upload className="mx-auto h-10 w-10 text-[#1E3A8A]" />
+            <Upload className="mx-auto h-14 w-14 text-[#1E3A8A]" />
 
             <h2 className="mt-3 text-lg font-bold sm:text-xl">
-              {t.uploadTitle}
+              Drop the bill photo here — JPG, PNG, PDF
             </h2>
 
             <p className="mt-1 text-sm text-slate-500">
@@ -2069,7 +2117,7 @@ export default function Home() {
                 onClick={() =>
                   fileRef.current?.click()
                 }
-                className="rounded-xl bg-[#1E3A8A] px-6 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-blue-900"
+                className="rounded-full bg-[#1E3A8A] px-6 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:scale-105 hover:bg-blue-900"
               >
                 {t.uploadBtn}
               </button>
@@ -2079,7 +2127,7 @@ export default function Home() {
                 onClick={
                   downloadSampleGujaratiBill
                 }
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-[#1E3A8A] shadow-sm hover:bg-slate-50"
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-[#1E3A8A] shadow-lg transition hover:scale-105 hover:bg-slate-50"
               >
                 <Download className="h-4 w-4" />
                 {t.sampleBill}
@@ -2091,6 +2139,12 @@ export default function Home() {
                 {t.extracting}
               </p>
             )}
+          </div>
+
+          <div className="mt-4 flex flex-wrap justify-center gap-3 text-sm font-semibold text-slate-700">
+            <span className="rounded-full bg-white px-4 py-2 shadow-sm">✓ 100% Offline</span>
+            <span className="rounded-full bg-white px-4 py-2 shadow-sm">✓ Gujarati + Hindi + English</span>
+            <span className="rounded-full bg-white px-4 py-2 shadow-sm">✓ No typing needed</span>
           </div>
 
           <div className="mt-6 grid gap-6 lg:grid-cols-2">
@@ -2191,16 +2245,19 @@ export default function Home() {
         </section>
 
         <section>
-          <h2 className="mb-4 text-xl font-bold">
-            {t.dashboard}
+          <h2 className="mb-1 text-xl font-bold">
+            Namaste, {activeProfile?.name} 👋
           </h2>
+          <p className="mb-4 text-sm text-slate-500">
+            {activeProfile?.businessName}
+          </p>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Kpi
               title={
                 t.totalSales
               }
-              value={sales}
+              value={dashboardSales}
               icon={
                 <IndianRupee className="h-5 w-5" />
               }
@@ -2211,7 +2268,7 @@ export default function Home() {
               title={
                 t.totalPurchase
               }
-              value={purchase}
+              value={dashboardPurchase}
               icon={
                 <ShoppingCart className="h-5 w-5" />
               }
@@ -2222,7 +2279,7 @@ export default function Home() {
               title={
                 t.totalKharch
               }
-              value={kharch}
+              value={dashboardKharch}
               icon={
                 <Receipt className="h-5 w-5" />
               }
@@ -2237,7 +2294,7 @@ export default function Home() {
 
               <div className="mt-2 flex items-end justify-between">
                 <CountInr
-                  value={profit}
+                  value={dashboardProfit}
                   ready={hydrated}
                   className="text-2xl font-extrabold"
                   style={{
@@ -2832,6 +2889,10 @@ export default function Home() {
         </div>
       )}
 
+      <footer className="border-t border-slate-200 bg-white px-4 py-6 text-center text-sm font-medium text-slate-500">
+        VyaparAI PRO - Built for 63M Kirana Stores | Parul Tech-A-Thon 2.0 | Next.js + Gemini + Laravel
+      </footer>
+
       {toast && (
         <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-slate-900 px-5 py-2 text-sm font-medium text-white shadow-lg">
           {toast}
@@ -2839,156 +2900,6 @@ export default function Home() {
       )}
     </div>
   );
-}
-
-function isApiSuccess(
-  value: unknown
-): value is {
-  success: true;
-  data: unknown;
-} {
-  if (
-    typeof value !==
-      "object" ||
-    value === null
-  ) {
-    return false;
-  }
-
-  const obj =
-    value as Record<
-      string,
-      unknown
-    >;
-
-  return (
-    obj.success === true &&
-    "data" in obj
-  );
-}
-
-function getApiError(
-  value: unknown
-): string | null {
-  if (
-    typeof value !==
-      "object" ||
-    value === null
-  ) {
-    return null;
-  }
-
-  const obj =
-    value as Record<
-      string,
-      unknown
-    >;
-
-  return typeof obj.message ===
-    "string"
-    ? obj.message
-    : null;
-}
-
-function normalizeExtracted(
-  value: unknown
-): Extracted {
-  if (
-    typeof value !==
-      "object" ||
-    value === null
-  ) {
-    throw new Error(
-      "Invalid AI response"
-    );
-  }
-
-  const obj =
-    value as Record<
-      string,
-      unknown
-    >;
-
-  const shopName =
-    typeof obj.shopName ===
-    "string"
-      ? obj.shopName.trim()
-      : "";
-
-  const date =
-    typeof obj.date ===
-    "string"
-      ? obj.date
-      : todayISO();
-
-  const totalAmount =
-    typeof obj.totalAmount ===
-    "number"
-      ? obj.totalAmount
-      : Number(
-          obj.totalAmount
-        );
-
-  const items = Array.isArray(
-    obj.items
-  )
-    ? obj.items.filter(
-        (
-          item
-        ): item is string =>
-          typeof item ===
-          "string"
-      )
-    : [];
-
-  const category =
-    typeof obj.category ===
-      "string" &&
-    isCategory(
-      obj.category
-    )
-      ? obj.category
-      : "Purchase";
-
-  const confidence =
-    typeof obj.confidence ===
-    "number"
-      ? Math.max(
-          0,
-          Math.min(
-            100,
-            Math.round(
-              obj.confidence
-            )
-          )
-        )
-      : 90;
-
-  if (!shopName) {
-    throw new Error(
-      "AI could not identify the shop name"
-    );
-  }
-
-  if (
-    !Number.isFinite(
-      totalAmount
-    ) ||
-    totalAmount < 0
-  ) {
-    throw new Error(
-      "AI returned an invalid bill amount"
-    );
-  }
-
-  return {
-    shopName,
-    date,
-    totalAmount,
-    items,
-    category,
-    confidence,
-  };
 }
 
 function StatCard({

@@ -1,5 +1,23 @@
+export const MOCK_BILL = {
+	shopName: "Patel Kirana & General Store Bayad",
+	date: "2026-08-22",
+	totalAmount: 1005,
+	items: [
+		"Chawal 5kg - Rs500",
+		"Tel 1L - Rs180",
+		"Khand 2kg - Rs90",
+		"Chai Patti 500g - Rs160",
+		"Biscuit - Rs75",
+	],
+	category: "Sales" as const,
+	confidence: 98,
+};
+
+export function mockOCR() {
+	return MOCK_BILL;
+}
+
 // VyaparAI PRO production AI integration example.
-// This helper is intentionally commented because the demo uses the server route.
 // npm install @google/generative-ai
 
 /**
@@ -16,4 +34,3 @@
  * return JSON.parse(result.response.text());
  */
 
-export {};
