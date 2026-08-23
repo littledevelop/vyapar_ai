@@ -2215,9 +2215,25 @@ export default function Home() {
                       {t.category}
                     </span>
 
-                    {badge(
-                      extracted.category
-                    )}
+                    <select
+                      value={extracted.category}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        if (isCategory(value)) {
+                          setExtracted({
+                            ...extracted,
+                            category: value,
+                          });
+                        }
+                      }}
+                      className="rounded-lg border border-slate-200 px-2 py-1 text-sm font-semibold outline-none focus:border-[#1E3A8A]"
+                    >
+                      {CATEGORIES.map((category) => (
+                        <option key={category} value={category}>
+                          {catLabel(t, category)}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <Row
