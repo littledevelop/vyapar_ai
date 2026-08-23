@@ -22,7 +22,7 @@ CREATE TABLE bills (
   category ENUM('Sales','Purchase','Kharch') NOT NULL,
   confidence INT DEFAULT 95,
   image_path VARCHAR(500),
-  extracted_data JSON NOT NULL COMMENT 'Stores {items[], shopName, date, amount}',
+  extracted_data JSON NOT NULL COMMENT 'Stores {items[], shopName, date, amount, category, confidence}',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   INDEX idx_user_date (user_id, bill_date),

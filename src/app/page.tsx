@@ -1298,6 +1298,7 @@ export default function Home() {
   const saveBill = (): void => {
     if (!extracted) return;
 
+    // In production, Laravel API: POST /api/bills/store
     const bill: Bill = {
       id: `${Date.now()}-${Math.random()
         .toString(36)
