@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { jsPDF } from "jspdf";
+import Image from "next/image";
 
 import {
   ArrowDownRight,
@@ -51,6 +52,12 @@ const PRIMARY = "#1E3A8A";
 const PROFIT_GREEN = "#10B981";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const ALLOWED_FILE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+]);
 
 const CATEGORIES = ["Sales", "Purchase", "Kharch"] as const;
 
@@ -354,6 +361,29 @@ function isLang(value: string | null): value is Lang {
 
 function isCategory(value: string): value is Category {
   return (CATEGORIES as readonly string[]).includes(value);
+}
+
+function isBill(value: unknown): value is Bill {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const bill = value as Partial<Bill>;
+
+  return (
+    typeof bill.id === "string" &&
+    typeof bill.shopName === "string" &&
+    typeof bill.date === "string" &&
+    typeof bill.totalAmount === "number" &&
+    Number.isFinite(bill.totalAmount) &&
+    bill.totalAmount >= 0 &&
+    Array.isArray(bill.items) &&
+    bill.items.every((item) => typeof item === "string") &&
+    typeof bill.category === "string" &&
+    isCategory(bill.category) &&
+    typeof bill.confidence === "number" &&
+    Number.isFinite(bill.confidence)
+  );
 }
 
 function catLabel(t: Copy, cat: Category): string {
@@ -729,33 +759,19 @@ export default function Home() {
     useState<Category>("Sales");
 
   useEffect(() => {
-    try {
-      const savedLang =
-        localStorage.getItem(LANG_KEY);
+    const initialize = () => {
+      try {
+        const savedLang =
+          localStorage.getItem(LANG_KEY);
 
-      if (isLang(savedLang)) {
-        setLang(savedLang);
-      }
+        if (isLang(savedLang)) {
+          setLang(savedLang);
+        }
 
-      const raw =
-        localStorage.getItem(STORAGE_KEY);
+        const raw =
+          localStorage.getItem(STORAGE_KEY);
 
-      if (!raw) {
-        const seed = sampleBills();
-
-        localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify(seed)
-        );
-
-        setBills(seed);
-      } else {
-        const parsed: unknown =
-          JSON.parse(raw);
-
-        if (Array.isArray(parsed)) {
-          setBills(parsed as Bill[]);
-        } else {
+        if (!raw) {
           const seed = sampleBills();
 
           localStorage.setItem(
@@ -764,24 +780,44 @@ export default function Home() {
           );
 
           setBills(seed);
+        } else {
+          const parsed: unknown =
+            JSON.parse(raw);
+
+          if (Array.isArray(parsed)) {
+            setBills(parsed.filter(isBill));
+          } else {
+            const seed = sampleBills();
+
+            localStorage.setItem(
+              STORAGE_KEY,
+              JSON.stringify(seed)
+            );
+
+            setBills(seed);
+          }
         }
-      }
-    } catch {
-      const seed = sampleBills();
-
-      try {
-        localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify(seed)
-        );
       } catch {
-        // Ignore storage errors.
-      }
+        const seed = sampleBills();
 
-      setBills(seed);
-    } finally {
-      setHydrated(true);
-    }
+        try {
+          localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify(seed)
+          );
+        } catch {
+          // Ignore storage errors.
+        }
+
+        setBills(seed);
+      } finally {
+        setHydrated(true);
+      }
+    };
+
+    const timer = window.setTimeout(initialize, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   const persist = useCallback(
@@ -1155,12 +1191,7 @@ export default function Home() {
   const processFile = async (
     file: File
   ): Promise<void> => {
-    if (
-      !file.type.startsWith(
-        "image/"
-      ) &&
-      file.type !== "application/pdf"
-    ) {
+    if (!ALLOWED_FILE_TYPES.has(file.type)) {
       showToast(t.invalidFile);
       return;
     }
@@ -1736,7 +1767,7 @@ export default function Home() {
             <input
               ref={fileRef}
               type="file"
-              accept="image/*,.pdf,application/pdf"
+              accept="image/jpeg,image/png,image/webp,application/pdf"
               className="hidden"
               onChange={(event) => {
                 onFiles(
@@ -1785,9 +1816,12 @@ export default function Home() {
               </h3>
 
               {preview ? (
-                <img
+                <Image
                   src={preview}
                   alt="Uploaded bill preview"
+                  width={1200}
+                  height={800}
+                  unoptimized
                   className="max-h-80 w-full rounded-2xl bg-slate-50 object-contain"
                 />
               ) : (
@@ -2129,7 +2163,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="rounded-3xl border border-blue-100 bg-gradient-to-br from-white to-blue-50 p-6 shadow-lg">
+        <section className="rounded-3xl border border-blue-100 bg-linear-to-br from-white to-blue-50 p-6 shadow-lg">
           <div className="mb-4 flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-[#1E3A8A]" />
 
@@ -2275,7 +2309,7 @@ export default function Home() {
             />
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-left text-sm">
+              <table className="w-full min-w-180 text-left text-sm">
                 <thead>
                   <tr className="border-b border-slate-100 text-slate-500">
                     <th className="py-3 font-medium">

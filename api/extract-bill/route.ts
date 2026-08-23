@@ -249,7 +249,9 @@ export async function POST(
     const response =
       await openai.responses.create(
         {
-          model: "gpt-5.6-luna",
+          model:
+            process.env.OPENAI_MODEL ??
+            "gpt-4o-mini",
 
           instructions: `
 You are VyaparAI PRO, an expert Indian business bill/invoice parser.
