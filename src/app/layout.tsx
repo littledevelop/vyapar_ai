@@ -16,6 +16,9 @@ export const metadata: Metadata = {
   title: "VyaparAI PRO — Bill Parser & Vyapar Intelligence",
   description:
     "Bill ka photo upload karo, AI turant profit batayega — Gujarati, Hindi, English.",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
